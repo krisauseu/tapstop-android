@@ -1,0 +1,5 @@
+<resources>
+    <string name="accessibility_description">Unterstützt die Spracheingabe in anderen Apps. TapStop liest das fokussierte Eingabefeld, um das Transkript an der Cursorposition einzufügen.</string>
+    <string name="mode_satellite">%1$s\n%2$s</string>
+    <string name="mode_bubble">%1$s %2$s</string>
+</resources>
