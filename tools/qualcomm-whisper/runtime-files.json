@@ -1,0 +1,66 @@
+{
+  "libQnnCpu.so": {
+    "bytes": 7114120,
+    "sha256": "b7af9f083f8ccafdef889021d5b3c78546ad9d4f689e7027ab66571d2142904f"
+  },
+  "libQnnHtp.so": {
+    "bytes": 3978976,
+    "sha256": "09e930b6af975bae23bcf6965ac2ce60f6b999aff37cb7eabe9b4d7c1bc3f264"
+  },
+  "libQnnHtpV75Skel.so": {
+    "bytes": 12358868,
+    "sha256": "2f6cfe5aae553d8ec88b6741bf8598a557375eacfc58056c2667fc43fda64f6a"
+  },
+  "libQnnHtpV75Stub.so": {
+    "bytes": 791424,
+    "sha256": "8be2bf0b0c6839d3e3bf9d8435e9b92d3fde0ccdea343d89960d75285ad28dab"
+  },
+  "libQnnHtpV81Skel.so": {
+    "bytes": 13546372,
+    "sha256": "9b7266e38aea818a1caeba5cbfebd9a8cbdba8f25dd82126d9b44ebf4fec4fa0"
+  },
+  "libQnnHtpV81Stub.so": {
+    "bytes": 816184,
+    "sha256": "5b0ea1ef9929bdfcdda0d8dfc6ddffdc913fa2be02cf01a1574d644b2e0e0d38"
+  },
+  "libQnnSystem.so": {
+    "bytes": 4068024,
+    "sha256": "b30bd9880dc48f6c5349185a7d45b326f8a064b10072e60094354fa23d9a2027"
+  },
+  "libdnnvad.so": {
+    "bytes": 576352,
+    "sha256": "46b1814e3a7b5be7cba21ec1ec493c30185d585272d26942b8697fed2c2330a7"
+  },
+  "libfft.so": {
+    "bytes": 54712,
+    "sha256": "2fb68bdf0c627032e6bb19e997233f89800f55b135d069a0a5a84b2454f37916"
+  },
+  "libnnvad_model.so": {
+    "bytes": 446416,
+    "sha256": "7c1690c6e9444a09d5a4baadd42afc01d703f16348716d8e20ae144f7659daaa"
+  },
+  "libopencc.so": {
+    "bytes": 1992064,
+    "sha256": "b93f50ef18003729ce298b11c6bf4d3d564f9187b4696a389ca3c774815f182a"
+  },
+  "libopencc_jni.so": {
+    "bytes": 49104,
+    "sha256": "0bd932c8f5a393c88cca268a2e5649156f87074e2c5edc090c42fe10ca6b457c"
+  },
+  "libwhisper_lib.so": {
+    "bytes": 999616,
+    "sha256": "cec6397ee7f4abed8cb8532409252c75a6e0753da07fb85fc58781bdc01720b7"
+  },
+  "libwhisperfunction.so": {
+    "bytes": 320776,
+    "sha256": "342b86c4a34135d020bba2a318774d873aaaa1f2ecdc920b3612a4795be9286b"
+  },
+  "libwhisperfunction_jni.so": {
+    "bytes": 6600600,
+    "sha256": "a7de2eee58db537e83a4b31336fe0e5be0bbd9739ab741b0ea8fa5316d86e40e"
+  },
+  "whisper-sdk.jar": {
+    "bytes": 22996,
+    "sha256": "2b9b00d5724a65559709058d40b93e94426dca11e77dc717f923399f3eab9eb5"
+  }
+}

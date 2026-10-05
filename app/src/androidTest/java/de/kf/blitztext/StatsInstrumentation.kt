@@ -12,17 +12,20 @@ import java.time.ZoneId
 /** Runs without another testing dependency; fixtures use a separate disposable database. */
 class StatsInstrumentation : Instrumentation() {
     private val report = StringBuilder()
+    private var localArguments: Bundle? = null
     private var browserInput = false
     private var accessibilityOnly = false
     private var statisticsOnly = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
+        if (arguments?.getString("localRuntime") == "true") localArguments = arguments
         browserInput = arguments?.getString("browserInput") == "true"
         accessibilityOnly = arguments?.getString("accessibilityOnly") == "true"
         statisticsOnly = arguments?.getString("statisticsOnly") == "true"
         start()
     }
     override fun onStart() {
+        localArguments?.let { runLocalRuntimeChecks(it); return }
         if (browserInput) {
             runBrowserInputChecks(accessibilityOnly)
             return
@@ -110,11 +113,16 @@ class StatsInstrumentation : Instrumentation() {
             pass("Metadata-only schema and full reset")
         } finally { db.close(); targetContext.deleteDatabase(name) }
         val settings = Settings(targetContext)
-        check(settings.apiKey().isNotBlank()) { "Existing selected API key cannot be decrypted" }
-        pass("Existing selected provider API key is decryptable (not logged)")
+        if (settings.provider.isCloud) {
+            check(settings.apiKey().isNotBlank()) { "Existing selected API key cannot be decrypted" }
+            pass("Existing selected provider API key is decryptable (not logged)")
+        } else {
+            check(settings.apiKey().isEmpty())
+            pass("Local provider requires no API key")
+        }
     }
     private fun inputChecks() {
-        val activity = startActivitySync(Intent(targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val activity = startActivitySync(Intent(targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK))
         try {
             sendStatus(1, Bundle().apply { putString("stream", "READY_ACCESSIBILITY\n") })
             val deadline = System.currentTimeMillis() + 20000

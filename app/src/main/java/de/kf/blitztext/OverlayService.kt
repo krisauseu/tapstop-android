@@ -13,7 +13,6 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
-import android.media.MediaRecorder
 import android.os.SystemClock
 import android.os.Build
 import android.os.Handler
@@ -37,7 +36,7 @@ import android.widget.FrameLayout
 import android.content.res.Configuration
 
 class OverlayService : Service() {
-    private enum class Phase { IDLE, RECORDING, PROCESSING }
+    private enum class Phase { IDLE, PREPARING, RECORDING, PROCESSING }
 
     private lateinit var windowManager: WindowManager
     private lateinit var bubble: TextView
@@ -48,9 +47,14 @@ class OverlayService : Service() {
     private var processingToken = 0
     private var recordingStarted = 0L
     private var recordingTarget: String? = null
-    private var recorder: MediaRecorder? = null
+    private var recorder: AudioRecording? = null
+    private var recordingProvider: Provider? = null
+    private var activeProcessor: DictationProcessor? = null
+    internal var sttProviderFactory: (Provider, GroqModel, String, DictationTrace?) -> SpeechToTextProvider =
+        { provider, model, key, diagnostic -> SpeechToTextProviders.create(this, provider, model, key, diagnostic) }
     private var audioFile: File? = null
     private var phase = Phase.IDLE
+    private var trace: DictationTrace? = null
     private var downX = 0f
     private var downY = 0f
     private var initialX = 0
@@ -288,71 +292,155 @@ class OverlayService : Service() {
         when (phase) {
             Phase.IDLE -> startRecording()
             Phase.RECORDING -> stopRecording()
-            Phase.PROCESSING -> Unit
+            Phase.PREPARING, Phase.PROCESSING -> Unit
         }
     }
 
     private fun startRecording() {
-        val key = settings.apiKey()
-        if (key.isBlank()) { toast("Bitte zuerst den ${settings.provider.label} API-Key speichern."); return }
+        val provider = settings.provider
+        if (provider.isCloud && settings.apiKey(provider).isBlank()) {
+            toast("Bitte zuerst den ${provider.label} API-Key speichern."); return
+        }
+        if (settings.mode.usesRewrite && settings.apiKey(settings.rewriteProvider).isBlank()) {
+            toast("Bitte zuerst den ${settings.rewriteProvider.label} API-Key für die Überarbeitung speichern."); return
+        }
+        if (provider == Provider.QUALCOMM_LOCAL) {
+            val runtime = QualcommRuntime.get(this)
+            phase = Phase.PREPARING
+            render()
+            val preparationNotice = if (runtime.status.value.phase != QualcommRuntimePhase.READY)
+                Toast.makeText(this, "Lokales Modell wird vorbereitet …", Toast.LENGTH_LONG).also { it.show() }
+            else null
+            val token = ++processingToken
+            worker.execute {
+                try {
+                    runtime.prepare()
+                    main.post {
+                        preparationNotice?.cancel()
+                        if (token == processingToken && phase == Phase.PREPARING) beginRecording(provider)
+                    }
+                } catch (e: Exception) {
+                    main.post {
+                        preparationNotice?.cancel()
+                        if (token == processingToken && phase == Phase.PREPARING) {
+                            toast("Lokale Spracherkennung nicht bereit: ${e.localizedMessage}")
+                            reset()
+                        }
+                    }
+                }
+            }
+        } else beginRecording(provider)
+    }
+
+    private fun beginRecording(provider: Provider) {
         TextInsertService.instance?.rememberFocusedField()
         recordingTarget = TextInsertService.instance?.statisticsTargetPackage()
-        val file = File(cacheDir, "recording-${System.currentTimeMillis()}.m4a")
         try {
-            val newRecorder = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(this) else @Suppress("DEPRECATION") MediaRecorder()
+            val newRecorder = AudioRecording.create(this, !provider.isCloud) {
+                if (phase == Phase.RECORDING) stopRecording()
+            }
             recorder = newRecorder
-            newRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
-            newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            newRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            newRecorder.setAudioEncodingBitRate(128_000)
-            newRecorder.setAudioSamplingRate(44_100)
-            newRecorder.setOutputFile(file.absolutePath)
-            newRecorder.prepare()
+            audioFile = newRecorder.file
+            // STT is pinned at capture start: format, limit and audio privacy cannot change mid-dictation.
+            recordingProvider = provider
             newRecorder.start()
             recordingStarted = SystemClock.elapsedRealtime()
-            audioFile = file
             phase = Phase.RECORDING
             vibrate()
             render()
         } catch (e: Exception) {
             recorder?.release(); recorder = null
-            file.delete()
+            audioFile?.delete(); audioFile = null
+            recordingProvider = null
             phase = Phase.IDLE
             render()
             toast("Aufnahme fehlgeschlagen: ${e.localizedMessage}")
         }
     }
 
+    private data class ProcessingConfiguration(
+        val provider: Provider, val model: GroqModel, val mode: Mode,
+        val sttKey: String, val rewriteProvider: Provider, val rewriteKey: String
+    )
+
     private fun stopRecording() {
+        val provider = recordingProvider ?: settings.provider
+        val mode = settings.mode
+        val rewriteProvider = settings.rewriteProvider
+        val configuration = ProcessingConfiguration(provider, settings.groqModel, mode,
+            settings.apiKey(provider), rewriteProvider,
+            if (mode.usesRewrite) settings.apiKey(rewriteProvider) else "")
         val file = audioFile
-        val recordingEnded = SystemClock.elapsedRealtime()
-        val recordingMs = (recordingEnded - recordingStarted).coerceAtLeast(0)
+        val ended = SystemClock.elapsedRealtime()
+        val capture = recorder
+        if (recordingProvider == Provider.QUALCOMM_LOCAL && capture != null) {
+            phase = Phase.PROCESSING
+            render()
+            val token = ++processingToken
+            worker.execute {
+                val result = runCatching { capture.stop(); capture.durationMs }
+                capture.release()
+                main.post {
+                    if (token != processingToken) { file?.delete(); return@post }
+                    recorder = null
+                    result.onSuccess { finishRecording(file, ended, it, configuration) }.onFailure {
+                        audioFile = null; file?.delete(); recordingProvider = null
+                        toast("Aufnahme fehlgeschlagen: ${it.localizedMessage}"); reset()
+                    }
+                }
+            }
+        } else finishRecording(file, ended, null, configuration)
+    }
+
+    private fun finishRecording(file: File?, recordingEnded: Long, capturedMs: Long?, configuration: ProcessingConfiguration) {
+        val diagnostic = DictationTrace.create()
+        trace = diagnostic
+        diagnostic?.event("recording_stop_requested")
+        var recordingMs = capturedMs ?: (recordingEnded - recordingStarted).coerceAtLeast(0)
         try {
             recorder?.stop()
+            recorder?.let { recordingMs = it.durationMs }
+            diagnostic?.event("recording_stopped")
             recorder?.release(); recorder = null
             audioFile = null
             if (file == null || file.length() == 0L) error("Keine Aufnahme vorhanden.")
+            diagnostic?.event("audio_finalized", "audio_ms=$recordingMs audio_bytes=${file.length()}")
             phase = Phase.PROCESSING
             vibrate()
             render()
-            val mode = settings.mode
-            val provider = settings.provider
-            val key = settings.apiKey(provider)
-            val groqModel = settings.groqModel
+            val mode = configuration.mode
+            val provider = configuration.provider
+            recordingProvider = null
+            val key = configuration.sttKey
+            val groqModel = configuration.model
             val token = ++processingToken
-            val client = ApiClient(provider, groqModel)
+            diagnostic?.event("configuration", "provider=${provider.name} model=${provider.sttModel(groqModel)} mode=${mode.name}")
+            val stt = sttProviderFactory(provider, groqModel, key, diagnostic)
+            val rewriteProvider = configuration.rewriteProvider
+            val rewriteKey = configuration.rewriteKey
+            val rewriteClient = if (mode.usesRewrite) ApiClient(rewriteProvider, groqModel).also { it.diagnostic = diagnostic } else null
+            val processor = DictationProcessor(stt,
+                rewrite = { text, selectedMode ->
+                    check(rewriteKey.isNotBlank()) { "${rewriteProvider.label} API-Key für die Überarbeitung fehlt." }
+                    requireNotNull(rewriteClient).rewrite(text, rewriteKey, selectedMode)
+                }, cancelRewrite = { rewriteClient?.cancel() })
+            activeProcessor = processor
             val rawTranscript = AtomicReference<String?>(null)
             val metrics = AtomicReference(DictationStat(
                 timestamp = System.currentTimeMillis(), recordingMs = recordingMs,
-                provider = provider.label,
-                model = if (provider == Provider.OPENAI) "whisper-1" else groqModel.id,
+                provider = provider.statisticsId,
+                model = provider.sttModel(groqModel),
                 mode = mode.name, targetPackage = recordingTarget
             ))
+            if (diagnostic != null) DictationTrace.watchdogs.incrementAndGet()
             main.postDelayed({
+                if (diagnostic != null) DictationTrace.watchdogs.decrementAndGet()
+                diagnostic?.event("watchdog_fired", "current=${token == processingToken} phase=$phase")
                 if (token == processingToken && phase == Phase.PROCESSING) {
+                    diagnostic?.snapshot("watchdog_timeout")
                     processingToken++
                     UsageStats.get(this).record(metrics.get())
-                    client.cancel()
+                    processor.cancel()
                     worker.shutdownNow()
                     worker = Executors.newSingleThreadExecutor()
                     file.delete()
@@ -364,29 +452,39 @@ class OverlayService : Service() {
                     reset()
                 }
             }, if (mode.usesRewrite) 140_000 else 90_000)
+            if (diagnostic != null) main.postDelayed({
+                if (token == processingToken && phase == Phase.PROCESSING) diagnostic.slowSnapshot()
+            }, 10_000)
+            diagnostic?.snapshot("worker_submitted")
+            if (diagnostic != null) DictationTrace.submitted.incrementAndGet()
             worker.execute {
+                if (diagnostic != null) { DictationTrace.submitted.decrementAndGet(); DictationTrace.workers.incrementAndGet() }
+                diagnostic?.workerStarted()
+                diagnostic?.snapshot("worker_started")
                 var raw: String? = null
                 try {
-                    val sttStarted = SystemClock.elapsedRealtime()
-                    raw = client.transcribe(file, key)
-                    val sttMs = SystemClock.elapsedRealtime() - sttStarted
-                    metrics.set(metrics.get().copy(rawWords = countWords(raw), sttMs = sttMs))
-                    rawTranscript.set(raw)
-                    val rewriteStarted = SystemClock.elapsedRealtime()
-                    val result = if (mode.usesRewrite) client.rewrite(raw, key, mode) else raw
+                    val processed = processor.process(file, mode) { transcript ->
+                        raw = transcript.rawTranscript
+                        metrics.set(metrics.get().copy(rawWords = countWords(transcript.rawTranscript), sttMs = transcript.sttMs))
+                        rawTranscript.set(transcript.rawTranscript)
+                    }
+                    val result = processed.text
                     val finished = SystemClock.elapsedRealtime()
                     val completed = metrics.get().copy(
                         finalWords = countWords(result),
-                        rewriteMs = if (mode.usesRewrite) finished - rewriteStarted else null,
+                        rewriteMs = processed.rewriteMs,
                         totalMs = finished - recordingEnded, success = true
                     )
+                    diagnostic?.event("result_ready")
                     main.post {
+                        diagnostic?.event("result_main_callback", "current=${token == processingToken} phase=$phase")
                         if (token == processingToken && phase == Phase.PROCESSING) {
                             deliver(result)
                             UsageStats.get(this).record(completed)
                         }
                     }
                 } catch (e: Exception) {
+                    diagnostic?.event("processing_error", "type=${e.javaClass.name} cause=${e.cause?.javaClass?.name}")
                     val transcript = raw
                     main.post {
                         if (token != processingToken || phase != Phase.PROCESSING) return@post
@@ -397,7 +495,12 @@ class OverlayService : Service() {
                         } else toast("Transkription fehlgeschlagen: ${e.localizedMessage}")
                         reset()
                     }
-                } finally { file.delete() }
+                } finally {
+                    val deleted = file.delete()
+                    if (diagnostic != null) DictationTrace.workers.decrementAndGet()
+                    diagnostic?.snapshot("cleanup_complete")
+                    diagnostic?.event("audio_cleanup", "deleted=$deleted exists=${file.exists()}")
+                }
             }
         } catch (e: Exception) {
             recorder?.release(); recorder = null
@@ -409,6 +512,7 @@ class OverlayService : Service() {
     }
 
     private fun deliver(text: String) {
+        trace?.event("insertion_begin")
         val ready = withTrailingSpace(text)
         try {
             if (!TextInsertService.instance.orFalseInsert(ready)) {
@@ -430,14 +534,14 @@ class OverlayService : Service() {
         (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("TapStop", text))
     }
 
-    private fun reset() { phase = Phase.IDLE; render() }
+    private fun reset() { activeProcessor = null; phase = Phase.IDLE; render(); trace?.event("processing_complete", "phase=$phase"); trace?.snapshot("idle") }
 
     private fun render() {
         if (!::bubble.isInitialized) return
         val color = when (phase) {
             Phase.IDLE -> Color.rgb(65, 71, 85)
             Phase.RECORDING -> Color.rgb(211, 48, 55)
-            Phase.PROCESSING -> Color.rgb(53, 100, 184)
+            Phase.PREPARING, Phase.PROCESSING -> Color.rgb(53, 100, 184)
         }
         bubble.background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
@@ -445,13 +549,14 @@ class OverlayService : Service() {
             setStroke((2 * resources.displayMetrics.density).toInt(), Color.WHITE)
         }
         bubble.text = getString(R.string.mode_bubble, settings.mode.symbol,
-            when (phase) { Phase.IDLE -> "🎙"; Phase.RECORDING -> "■"; Phase.PROCESSING -> "…" })
+            when (phase) { Phase.IDLE -> "🎙"; Phase.RECORDING -> "■"; Phase.PREPARING, Phase.PROCESSING -> "…" })
         bubble.text = android.text.SpannableString(bubble.text).apply {
             setSpan(android.text.style.RelativeSizeSpan(0.6f), 0, settings.mode.symbol.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
         bubble.contentDescription = "${settings.mode.label}. " + when (phase) {
             Phase.IDLE -> "TapStop: Aufnahme starten"
             Phase.RECORDING -> "TapStop: Aufnahme läuft, zum Beenden tippen"
+            Phase.PREPARING -> "TapStop: Lokales Modell wird vorbereitet"
             Phase.PROCESSING -> "TapStop: Text wird verarbeitet"
         }
     }
@@ -464,10 +569,12 @@ class OverlayService : Service() {
     private fun toast(message: String) { Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
 
     override fun onDestroy() {
+        trace?.snapshot("service_destroyed")
         main.removeCallbacks(longPress)
         settings.removeModeObserver(modeObserver)
         closeFan()
         processingToken++
+        activeProcessor?.cancel(); activeProcessor = null
         recorder?.runCatching { stop() }
         recorder?.release(); recorder = null
         audioFile?.delete(); audioFile = null

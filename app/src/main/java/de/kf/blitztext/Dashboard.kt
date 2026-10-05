@@ -98,11 +98,11 @@ fun Dashboard(stats: UsageStats, refresh: Int, modifier: Modifier = Modifier) {
             Section("Provider") {
                 if (data.successful.isEmpty()) Text("Noch keine Nutzung")
                 data.successful.groupBy { it.provider }.forEach { (provider, rows) ->
-                    Text(provider, style = MaterialTheme.typography.titleMedium)
+                    Text(if (provider == "qualcomm") "Qualcomm NPU" else provider, style = MaterialTheme.typography.titleMedium)
                     Text("${rows.size} Diktate · ${number(rows.sumOf { (it.rawWords ?: 0).toLong() })} Wörter")
                     Text("STT-Zeit ${latency(median(rows.mapNotNull { it.sttMs }))} · ${realtime(rows)}", color = MaterialTheme.colorScheme.primary)
                     rows.groupBy { it.model }.forEach { (model, modelRows) ->
-                        Text("$provider · $model", style = MaterialTheme.typography.titleSmall)
+                        Text(if (provider == "qualcomm") "Qualcomm NPU · Whisper Large V3 Turbo" else "$provider · $model", style = MaterialTheme.typography.titleSmall)
                         Text("${modelRows.size} Diktate · ${number(modelRows.sumOf { (it.rawWords ?: 0).toLong() })} Wörter", style = MaterialTheme.typography.bodySmall)
                         Text("STT-Zeit ${latency(median(modelRows.mapNotNull { it.sttMs }))} · ${realtime(modelRows)}", style = MaterialTheme.typography.bodySmall)
                     }

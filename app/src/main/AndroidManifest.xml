@@ -23,6 +23,8 @@
         android:label="TapStop"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
+        <!-- Optional for the cloud providers; local support probes the system FastRPC library. -->
+        <uses-native-library android:name="libcdsprpc.so" android:required="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

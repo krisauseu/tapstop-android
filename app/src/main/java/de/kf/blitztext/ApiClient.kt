@@ -10,16 +10,22 @@ import java.util.UUID
 class ApiClient internal constructor(
     private val provider: Provider,
     private val groqModel: GroqModel,
-    private val openConnection: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }
+    private val openConnection: (URL) -> HttpURLConnection = { url ->
+        if (BuildConfig.DEBUG && DictationTrace.connectionFactory != null) DictationTrace.connectionFactory!!.invoke(url)
+        else url.openConnection() as HttpURLConnection
+    }
 ) {
+    init { require(provider.isCloud) { "Local STT darf keinen Cloud-Client verwenden." } }
+    internal var diagnostic: DictationTrace? = null
     @Volatile private var activeConnection: HttpURLConnection? = null
 
     private val baseUrl = if (provider == Provider.OPENAI) "https://api.openai.com/v1" else "https://api.groq.com/openai/v1"
     private val providerName = if (provider == Provider.OPENAI) "OpenAI" else "Groq"
 
-    fun cancel() { activeConnection?.disconnect() }
+    fun cancel() { diagnostic?.event("cancel_requested"); activeConnection?.disconnect() }
 
     fun transcribe(audio: File, apiKey: String): String {
+        diagnostic?.event("stt_begin")
         val boundary = "TapStop-${UUID.randomUUID()}"
         val model = if (provider == Provider.OPENAI) "whisper-1" else groqModel.id
         val modelPart = "--$boundary\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n$model\r\n".toByteArray()
@@ -28,20 +34,26 @@ class ApiClient internal constructor(
         val connection = connect("$baseUrl/audio/transcriptions", apiKey, "multipart/form-data; boundary=$boundary")
         try {
             connection.setFixedLengthStreamingMode(modelPart.size.toLong() + filePart.size + audio.length() + ending.size)
+            diagnostic?.event("stt_http_execute")
             connection.outputStream.use { output ->
+                diagnostic?.event("stt_request_stream_ready")
                 output.write(modelPart)
                 output.write(filePart)
                 audio.inputStream().use { it.copyTo(output) }
                 output.write(ending)
             }
-            val result = response(connection)
-            return result.optString("text").takeIf { it.isNotBlank() }
+            diagnostic?.event("stt_upload_complete")
+            val result = response(connection, "stt")
+            val transcript = result.optString("text").takeIf { it.isNotBlank() }
                 ?: error("$providerName hat kein Transkript geliefert.")
-        } finally { connection.disconnect(); if (activeConnection === connection) activeConnection = null }
+            diagnostic?.event("stt_parsing_complete")
+            return transcript
+        } finally { connection.disconnect(); if (activeConnection === connection) activeConnection = null; diagnostic?.connectionClosed() }
     }
 
     fun rewrite(text: String, apiKey: String, mode: Mode = Mode.PLUS): String {
         if (!mode.usesRewrite) return text
+        diagnostic?.event("rewrite_begin")
         val body = JSONObject().apply {
             put("model", if (provider == Provider.OPENAI) "gpt-4o-mini" else "openai/gpt-oss-120b")
             put("temperature", if (provider == Provider.OPENAI) 0.3 else when (mode) {
@@ -56,12 +68,19 @@ class ApiClient internal constructor(
         try {
             val bytes = body.toString().toByteArray(Charsets.UTF_8)
             connection.setFixedLengthStreamingMode(bytes.size)
-            connection.outputStream.use { it.write(bytes) }
-            val result = response(connection)
-            return result.getJSONArray("choices").getJSONObject(0).getJSONObject("message")
+            diagnostic?.event("rewrite_http_execute")
+            connection.outputStream.use {
+                diagnostic?.event("rewrite_request_stream_ready")
+                it.write(bytes)
+            }
+            diagnostic?.event("rewrite_upload_complete")
+            val result = response(connection, "rewrite")
+            val rewritten = result.getJSONArray("choices").getJSONObject(0).getJSONObject("message")
                 .getString("content").trim().takeIf { it.isNotBlank() }
                 ?: error("$providerName hat keinen überarbeiteten Text geliefert.")
-        } finally { connection.disconnect(); if (activeConnection === connection) activeConnection = null }
+            diagnostic?.event("rewrite_parsing_complete")
+            return rewritten
+        } finally { connection.disconnect(); if (activeConnection === connection) activeConnection = null; diagnostic?.connectionClosed() }
     }
 
     private fun connect(url: String, key: String, contentType: String): HttpURLConnection =
@@ -74,12 +93,15 @@ class ApiClient internal constructor(
             setRequestProperty("Content-Type", contentType)
             setRequestProperty("Accept", "application/json")
             useCaches = false
-        }.also { activeConnection = it }
+        }.also { activeConnection = it; diagnostic?.connectionOpened(it.javaClass.name) }
 
-    private fun response(connection: HttpURLConnection): JSONObject {
+    private fun response(connection: HttpURLConnection, stage: String): JSONObject {
+        diagnostic?.event("${stage}_headers_wait")
         val code = connection.responseCode
+        diagnostic?.event("${stage}_headers_received", "http=$code")
         val body = (if (code in 200..299) connection.inputStream else connection.errorStream)
             ?.bufferedReader()?.use { it.readText() }.orEmpty()
+        diagnostic?.event("${stage}_body_complete")
         if (code !in 200..299) {
             val message = runCatching { JSONObject(body).getJSONObject("error").getString("message") }
                 .getOrDefault("HTTP $code")

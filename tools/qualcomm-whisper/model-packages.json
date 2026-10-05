@@ -1,0 +1,54 @@
+{
+  "sm8650-v75": {
+    "schema_version": 1,
+    "target_id": "sm8650-v75",
+    "package_id": "whisper-large-v3-turbo-sm8650-fp16",
+    "package_version": "1",
+    "model_id": "whisper-large-v3-turbo",
+    "precision": "fp16",
+    "soc_model": 57,
+    "htp_version": 75,
+    "voiceai_version": "2.7.1.0",
+    "qairt_version": "2.50.0.260828",
+    "files": {
+      "encoder.bin": {
+        "bytes": 1752566520,
+        "sha256": "3cbdc87dd400d7efd4f3a093dc3144fb5262e7b4331414581e2fe7c0ed6b12cb"
+      },
+      "decoder.bin": {
+        "bytes": 452486656,
+        "sha256": "092bdc00f23c62b5863fa46a8dd1b683d9948eac357da5af1a26903a36c3362a"
+      },
+      "vocab.bin": {
+        "bytes": 357313,
+        "sha256": "0ba87984671b92e03b56b84ce9b217020663f6a269b5a9800901391430b79c4b"
+      }
+    }
+  },
+  "sm8845-v81": {
+    "schema_version": 1,
+    "target_id": "sm8845-v81",
+    "package_id": "whisper-large-v3-turbo-sm8845-fp16",
+    "package_version": "1",
+    "model_id": "whisper-large-v3-turbo",
+    "precision": "fp16",
+    "soc_model": 97,
+    "htp_version": 81,
+    "voiceai_version": "2.7.1.0",
+    "qairt_version": "2.50.0.260828",
+    "files": {
+      "decoder.bin": {
+        "bytes": 452449800,
+        "sha256": "dcdc7d2cf7168d090d589b1ae5da0e06ddd876c76a72a9375772f9de9b81e862"
+      },
+      "encoder.bin": {
+        "bytes": 1752666608,
+        "sha256": "0a592c697de8b8dfe63cf2681155241807cb2c0b49e53d4dc1aea365a339a338"
+      },
+      "vocab.bin": {
+        "bytes": 357313,
+        "sha256": "0ba87984671b92e03b56b84ce9b217020663f6a269b5a9800901391430b79c4b"
+      }
+    }
+  }
+}

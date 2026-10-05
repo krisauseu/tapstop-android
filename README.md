@@ -18,13 +18,35 @@ Ein **480-ms-Long-Press** auf die Blase öffnet im Ruhezustand den Fächer mit d
 | --- | --- | --- |
 | OpenAI | `whisper-1` | `gpt-4o-mini`, Temperatur 0,3 |
 | Groq | `whisper-large-v3` oder `whisper-large-v3-turbo` | `openai/gpt-oss-120b`, Temperatur 0,2 für Plus/Formal und 0,4 für Chat |
+| Lokal – Qualcomm NPU | Whisper Large V3 Turbo FP16, auf dem Gerät | Separat auswählbarer OpenAI- oder Groq-Rewrite |
 
-Die API-Keys werden für beide Provider getrennt auf dem Gerät gespeichert und per Android Keystore AES-GCM geschützt. Audio liegt während der Verarbeitung im privaten Cache und wird danach gelöscht. Audio und das für die Überarbeitung benötigte Transkript werden an den ausgewählten Provider gesendet. Eine laufende Verarbeitung verwendet die Einstellungen vom Aufnahmeende.
+STT und Textüberarbeitung lassen sich getrennt auswählen, zum Beispiel **Local + Groq-Rewrite**. Ohne eigene Rewrite-Auswahl bleibt bei bestehenden Cloudinstallationen die bisherige Providerpaarung erhalten; Local übernimmt den zuletzt gewählten Cloudprovider. Die vorhandenen Modelle, Temperaturen und Prompts bleiben unverändert.
+
+Die API-Keys werden für OpenAI und Groq getrennt per Android Keystore AES-GCM geschützt und beim Providerwechsel erhalten. **Local benötigt keinen API-Key.** Audio liegt während der Verarbeitung im privaten Cache und wird danach gelöscht. Der STT-Provider wird beim Aufnahmestart festgelegt; Modus und Rewrite-Einstellungen werden am Aufnahmeende übernommen.
+
+**Local + Roh:** Spracherkennung und Textverarbeitung erfolgen vollständig auf dem Gerät; TapStop sendet weder Audio noch Transkript an einen Cloudprovider. **Local + Plus/Chat/Formal:** Die Spracherkennung bleibt lokal; das Transkript wird anschließend an den konfigurierten Cloudprovider zur Überarbeitung gesendet. Bei OpenAI-/Groq-STT wird die Aufnahme zum gewählten STT-Provider übertragen. Es gibt keinen automatischen Cloud-Fallback.
+
+### Lokale Spracherkennung
+
+Local unterstützt **maximal 30 Sekunden pro Diktat** und stoppt dann automatisch. Ein weiterer Tap beendet eine kürzere Aufnahme. Diese Grenze gilt ausschließlich für Local. Das etwa 2,2 GB große Modell wird separat importiert und ist nicht in der APK enthalten. Die Qualcomm-Runtime muss im verwendeten APK-Build enthalten sein; der normale Quellcode-Build benötigt keine proprietären SDK-Dateien.
+
+**Bekannte SDK-Grenze:** Bei bestimmten Aufnahmen nahe 30 Sekunden kann VoiceAI mit `SPECTROGRAM FAIL` scheitern. TapStop zeigt dann einen Fehler, fügt keinen Teiltext ein und startet keinen Cloud-Rewrite. Ein neues, kürzeres Diktat kann ohne erneutes Laden des Modells gestartet werden. Der automatische Stopp ist keine Garantie für eine erfolgreiche Erkennung jeder Aufnahme.
+
+Aktuell sind zwei lokale Modelltargets in TapStop mit echten Mikrofon-Diktaten validiert:
+
+| SoC/Target | Konkret getestetes Gerät |
+| --- | --- |
+| Snapdragon 8 Gen 3 · SM8650 · HTP V75 | Samsung Galaxy S24 Ultra |
+| Snapdragon 8 Gen 5 · SM8845 / SM8845P · HTP V81 | HONOR MagicPad 4 |
+
+TapStop erkennt den SoC automatisch. Andere Gerätemodelle mit einem bekannten passenden Target werden als **noch nicht am Gerät getestet** gekennzeichnet. Geräte ohne bekanntes Modelltarget sehen die deaktivierte Local-Option. Daraus folgt keine pauschale Unterstützung aller Snapdragon-Geräte. Die [Geräteabnahme](DEVICE_TESTS.md) dokumentiert Roh, Plus mit Groq, Einfügung, Statistik und HTP-Nachweise sowie die bekannte SDK-Grenze.
+
+Modellimport, lokale SDK-Builds, Grenzen und Erweiterung auf weitere SoCs: [Qualcomm-Backend](docs/QUALCOMM_LOCAL_STT.md). Herkunft und Weitergaberechte: [Lizenzinventar](docs/QUALCOMM_LICENSING.md).
 
 ## Nutzung
 
-1. APK als Update installieren, OpenAI oder Groq auswählen und den passenden API-Key speichern.
-2. Bei Groq zwischen Whisper Large V3 und Large V3 Turbo wählen.
+1. APK als Update installieren und einen STT-Provider auswählen. Für OpenAI/Groq den passenden API-Key speichern; für Local das passende Modellpaket über **Modellordner importieren** auswählen.
+2. Bei Groq zwischen Whisper Large V3 und Large V3 Turbo wählen. Bei Local das Modell prüfen/vorbereiten; die erste Initialisierung benötigt zusätzliche Zeit. Für Plus/Chat/Formal einen Cloudprovider für die Textüberarbeitung konfigurieren.
 3. Mikrofon und „Über anderen Apps anzeigen“ erlauben. Für direktes Einfügen **TapStop Texteingabe** unter Bedienungshilfen aktivieren.
 4. Die Overlay-Blase aus der sichtbaren App starten und in einer anderen App ein Textfeld fokussieren.
 5. Blase tippen, sprechen, erneut tippen. Während der Aufnahme wird die Blase rot, während der Verarbeitung blau.
@@ -33,7 +55,7 @@ Die Android-Plattform beschränkt Mikrofon-Foreground-Services. Nach einem Neust
 
 ## Version und Build
 
-Aktuelle Version: **0.8**, `versionCode=8`. Die Umbenennung verändert weder Versionsnummer noch Funktion, Provider, Modelle oder Prompts.
+Aktuelle Version: **0.9**, `versionCode=9`: Local Qualcomm NPU als dritter STT-Provider, Modellimport und separate Rewrite-Auswahl.
 
 SDK 36 und JDK 17 sind erforderlich. Für den Build muss `JAVA_HOME` auf JDK 17 zeigen. Mit Android Studio öffnen oder ausführen:
 
@@ -41,11 +63,11 @@ SDK 36 und JDK 17 sind erforderlich. Für den Build muss `JAVA_HOME` auf JDK 17 
 ./gradlew assembleDebug lint testDebugUnitTest packageTapStop
 ```
 
-Die Standardausgabe ist `app/build/outputs/apk/debug/app-debug.apk`; die benannte APK liegt unter **`app/build/outputs/apk/tapstop/TapStop-Android-0.8.apk`**. Sie wird weiterhin mit dem vorhandenen lokalen Debug-Schlüssel signiert. Für Updates auf eine bisherige Installation muss dieselbe Signatur verwendet werden; ein anderer Rechner hat üblicherweise einen anderen Debug-Schlüssel. Signaturschlüssel gehören nicht ins Repository.
+Die Standardausgabe ist `app/build/outputs/apk/debug/app-debug.apk`; die benannte APK liegt unter **`app/build/outputs/apk/tapstop/TapStop-Android-0.9.apk`**. Sie wird weiterhin mit dem vorhandenen lokalen Debug-Schlüssel signiert. Für Updates auf eine bisherige Installation muss dieselbe Signatur verwendet werden; ein anderer Rechner hat üblicherweise einen anderen Debug-Schlüssel. Signaturschlüssel gehören nicht ins Repository.
 
-Lokale Prüfung des TapStop-Stands: Build erfolgreich, **18 Tests bestanden**, Lint **0 Fehler / 21 Hinweise**. APK-Label, Version und unveränderte Signatur geprüft.
+Ein Build mit lokal bereitgestellter Qualcomm-Runtime verwendet zusätzlich `-PqualcommRuntimeDir=/path/to/local-runtime`. Struktur und Werkzeuge stehen in [tools/qualcomm-whisper](tools/qualcomm-whisper/README.md). Qualcomm-Dateien und Modellgewichte gehören nicht ins öffentliche Repository.
 
-Die vorhandenen JVM-/Robolectric-Tests prüfen Gesten, Modus-Fächer, Moduspersistenz, Roh-Verarbeitung ohne Rewrite-Netzwerk sowie Request-Modelle, Temperaturen und exakte Prompttexte beider Provider. Für die Umbenennung werden keine Geräte- oder Live-Provider-Tests benötigt. Historische Geräteprüfungen stehen in [DEVICE_TESTS.md](DEVICE_TESTS.md) und [INSERT_DEVICE_TESTS.md](INSERT_DEVICE_TESTS.md).
+Die JVM-/Robolectric-Tests prüfen weiterhin Gesten, Modus-Fächer, Persistenz, Roh-Verarbeitung ohne Rewrite-Netzwerk sowie Request-Modelle, Temperaturen und exakte Prompttexte beider Cloudprovider. Hinzu kommen Targetzuordnung, Modellprüfung/Import, der lokale Runtime-Lifecycle, Providertrennung und Local-Statistik. Aktuelle und historische Geräteprüfungen stehen in [DEVICE_TESTS.md](DEVICE_TESTS.md) und [INSERT_DEVICE_TESTS.md](INSERT_DEVICE_TESTS.md). Die PoC-Abnahmen ersetzen keine Geräteabnahme der integrierten App.
 
 ## Update- und Datenkompatibilität
 
@@ -74,6 +96,8 @@ Eine erfolgreiche Verarbeitung zählt auch dann, wenn das Ergebnis über den bes
 
 Ab 0.4 zeigt der Provider-/Modellvergleich zusätzlich **× Echtzeit**: Summe `recording_ms` / Summe `stt_ms` im gewählten Zeitraum, kein Mittelwert einzelner Faktoren. Nur erfolgreiche Diktate mit positiven Aufnahme- und STT-Zeiten gehen in beide Summen ein; ohne messbare Zeiten erscheint ein Strich. 30 Sekunden Audio bei 1 Sekunde STT ergeben 30× Echtzeit. Die absolute **STT-Zeit** bleibt als Median sichtbar. Vorhandene Statistiken aus 0.3 werden ohne Migration weiterverwendet.
 
+Local erscheint separat als **Qualcomm NPU / Whisper Large V3 Turbo**. Die bestehenden Felder speichern `provider=qualcomm`, `model=whisper-large-v3-turbo`, Modus sowie Aufnahme-, STT-, Rewrite- und Gesamtzeit. Die vorbereitende Modellinitialisierung gehört nicht zur STT-Latenz. Das Datenbankschema bleibt unverändert.
+
 Speicherung: privates SQLite `usage.db`, Schema Version 1, Tabelle `dictations`:
 
 | Spalte | Typ / Bedeutung |
@@ -87,7 +111,7 @@ Speicherung: privates SQLite `usage.db`, Schema Version 1, Tabelle `dictations`:
 | `stt_ms`, `rewrite_ms`, `total_ms` | INTEGER, nullable |
 | `success` | INTEGER, 0 oder 1 |
 
-Index: `dictations_timestamp(timestamp)`. SQLite läuft auf Hintergrundthreads. Keine neue Runtime-Dependency, Berechtigung, Cloud-Anbindung oder Telemetrie. Das Ziel-Package wird ausschließlich vom bereits für die Einfügung gewählten Accessibility-Knoten gelesen; die Einfügelogik bleibt unberührt. App-Namen werden soweit sichtbar mit PackageManager aufgelöst, sonst wird das Package angezeigt. Eine Launcher-Intent-Abfrage erlaubt die Namensauflösung gewöhnlicher startbarer Apps, ohne `QUERY_ALL_PACKAGES` oder zusätzliche Berechtigung. Es wird keine Liste installierter Apps gespeichert. `allowBackup=false` gilt weiterhin; Android-12+-Datenextraktionsregeln schließen Cloud-Backups und Geräteübertragungen explizit aus. API-Keys und Einstellungen bleiben in den bestehenden Preferences/Keystore-Einträgen. Statistiken zurücksetzen löscht nach Bestätigung ausschließlich die Statistikzeilen.
+Index: `dictations_timestamp(timestamp)`. SQLite läuft auf Hintergrundthreads. Die Statistik benötigt keine zusätzliche Berechtigung, Cloud-Anbindung oder Telemetrie. Das Ziel-Package wird ausschließlich vom bereits für die Einfügung gewählten Accessibility-Knoten gelesen; die Einfügelogik bleibt unberührt. App-Namen werden soweit sichtbar mit PackageManager aufgelöst, sonst wird das Package angezeigt. Eine Launcher-Intent-Abfrage erlaubt die Namensauflösung gewöhnlicher startbarer Apps, ohne `QUERY_ALL_PACKAGES` oder zusätzliche Berechtigung. Es wird keine Liste installierter Apps gespeichert. `allowBackup=false` gilt weiterhin; Android-12+-Datenextraktionsregeln schließen Cloud-Backups und Geräteübertragungen explizit aus. API-Keys und Einstellungen bleiben in den bestehenden Preferences/Keystore-Einträgen. Statistiken zurücksetzen löscht nach Bestätigung ausschließlich die Statistikzeilen.
 
 ## Automatisierter Gerätetest
 

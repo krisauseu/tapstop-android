@@ -26,6 +26,11 @@ try:
             adb("shell", "settings", "put", "secure", "enabled_accessibility_services", original)
     process.wait()
 finally:
+    # Instrumentation.finish() terminates the app process, including the service
+    # reconnected at READY_ACCESSIBILITY. Rebind after exit as well so Samsung
+    # does not leave an enabled service marked crashed. Preserve other services.
+    remaining = ":".join(x for x in original.split(":") if x != service)
+    adb("shell", "settings", "put", "secure", "enabled_accessibility_services", remaining or "null")
     adb("shell", "settings", "put", "secure", "enabled_accessibility_services", original)
 if process.returncode or "FAILED" in "".join(output) or "PASS: Original deliver" not in "".join(output):
     raise SystemExit(1)

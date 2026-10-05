@@ -25,3 +25,23 @@ keystore.properties
 *.sqlite-*
 *.hprof
 credentials*.json
+
+# Local Qualcomm SDK, model weights, intermediate graphs and private device evidence.
+local-qualcomm/
+qualcomm-work/
+**/models/
+*.bin
+*.dlc
+*.onnx
+*.onnx.data
+*.safetensors
+*.so
+*.aar
+*.jar
+*.wav
+*.m4a
+*.pcm
+*.zip
+diagnostics/
+**/__pycache__/
+*.pyc

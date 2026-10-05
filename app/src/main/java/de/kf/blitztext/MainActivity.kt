@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var settings: Settings
     private var refresh by mutableIntStateOf(0)
     private val modeObserver = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == "mode") refresh++
+        if (key in setOf("mode", "provider", "rewrite_provider")) refresh++
     }
     private val microphone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             return
         }
-        if (settings.apiKey().isBlank()) {
+        if (settings.provider.isCloud && settings.apiKey().isBlank()) {
             Toast.makeText(this, "Bitte zuerst den ${settings.provider.label} API-Key speichern.", Toast.LENGTH_SHORT).show()
             return
         }
@@ -128,7 +128,7 @@ class MainActivity : ComponentActivity() {
                 Text("Einstellungen", style = MaterialTheme.typography.headlineMedium)
                 Text("Einmal tippen: aufnehmen. Noch einmal tippen: transkribieren und einfügen.")
                 Spacer(Modifier.height(8.dp))
-                Text("API-Anbieter", style = MaterialTheme.typography.titleMedium)
+                Text("Spracherkennung", style = MaterialTheme.typography.titleMedium)
                 ModeRow("OpenAI", provider == Provider.OPENAI) {
                     provider = Provider.OPENAI; settings.provider = provider
                     keyInput = ""; keySaved = settings.apiKey(provider).isNotBlank()
@@ -137,6 +137,11 @@ class MainActivity : ComponentActivity() {
                     provider = Provider.GROQ; settings.provider = provider
                     keyInput = ""; keySaved = settings.apiKey(provider).isNotBlank()
                 }
+                QualcommSettings(provider == Provider.QUALCOMM_LOCAL, observed) {
+                    provider = Provider.QUALCOMM_LOCAL; settings.provider = provider
+                    keyInput = ""; keySaved = false
+                }
+                if (provider.isCloud) {
                 OutlinedTextField(
                     value = keyInput,
                     onValueChange = { keyInput = it },
@@ -162,6 +167,7 @@ class MainActivity : ComponentActivity() {
                         keySaved = false
                     }, enabled = keySaved) { Text("Key löschen") }
                 }
+                }
                 Text("Transkription", style = MaterialTheme.typography.titleMedium)
                 if (provider == Provider.GROQ) {
                     ModeRow("Whisper Large V3", groqModel == GroqModel.LARGE_V3) {
@@ -170,12 +176,24 @@ class MainActivity : ComponentActivity() {
                     ModeRow("Whisper Large V3 Turbo", groqModel == GroqModel.LARGE_V3_TURBO) {
                         groqModel = GroqModel.LARGE_V3_TURBO; settings.groqModel = groqModel
                     }
-                } else Text("OpenAI Whisper-1", style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    if (provider == Provider.GROQ) "Plus nutzt bei Groq GPT-OSS 120B."
-                    else "Plus nutzt bei OpenAI GPT-4o mini.",
-                    style = MaterialTheme.typography.bodySmall
-                )
+                } else Text(if (provider.isCloud) "OpenAI Whisper-1" else "Whisper Large V3 Turbo FP16", style = MaterialTheme.typography.bodyMedium)
+                Text("Textüberarbeitung: Plus / Chat / Formal", style = MaterialTheme.typography.titleMedium)
+                ModeRow("Automatisch: ${if (provider.isCloud) "wie Spracherkennung" else "zuletzt gewählter Cloudprovider"}", settings.rewriteFollowsStt) {
+                    settings.followSttForRewrite(); refresh++
+                }
+                Provider.cloudProviders.forEach { choice ->
+                    ModeRow(choice.label, !settings.rewriteFollowsStt && settings.rewriteProvider == choice) {
+                        settings.rewriteProvider = choice; refresh++
+                    }
+                }
+                Text("Überarbeitung mit ${settings.rewriteProvider.label}: ${if (settings.rewriteProvider == Provider.GROQ) "GPT-OSS 120B" else "GPT-4o mini"}.",
+                    style = MaterialTheme.typography.bodySmall)
+                if (provider == Provider.QUALCOMM_LOCAL) {
+                    Text(if (mode.usesRewrite) "Spracherkennung lokal. Das Transkript wird anschließend zur Überarbeitung an ${settings.rewriteProvider.label} gesendet."
+                        else "Roh: Keine Cloud-Verarbeitung.", style = MaterialTheme.typography.bodySmall)
+                    if (mode.usesRewrite && settings.apiKey(settings.rewriteProvider).isBlank())
+                        Text("Für die Überarbeitung bitte den Key unter ${settings.rewriteProvider.label} speichern.", color = MaterialTheme.colorScheme.error)
+                }
                 Spacer(Modifier.height(6.dp))
                 Text("Modus", style = MaterialTheme.typography.titleMedium)
                 Mode.entries.forEach { choice ->

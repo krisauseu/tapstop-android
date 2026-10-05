@@ -47,4 +47,13 @@ try {
   console.log(JSON.stringify({name,fallback,pass,value,expected,output:output.trim()}));
   if(!pass) throw Error('Browser insertion regression');
  }
-} finally {adb('shell','settings','put','secure','enabled_accessibility_services',original);ws.close()}
+} finally {
+ // Instrumentation owns (and terminates) the app process. Rebind an originally
+ // enabled service so returning to the exact setting also restores text input.
+ if(original.split(':').includes(service)) {
+  adb('shell','settings','put','secure','enabled_accessibility_services',without||'null');
+  await sleep(300);
+ }
+ adb('shell','settings','put','secure','enabled_accessibility_services',original);
+ ws.close();
+}
