@@ -1,0 +1,45 @@
+# TapStop für Android
+
+> Systemweite Spracheingabe: Tap → sprechen → Tap → Text im fokussierten Eingabefeld.
+
+## Projekt
+- Native Android-App mit verschiebbarer Overlay-Blase, Texteingabe über Accessibility und Clipboard-Fallback.
+- Modi: Roh (STT ohne Rewrite), Plus (minimale Korrektur), Chat (lockere Nachricht), Formal (sachliche Überarbeitung).
+- Stack: Kotlin, Jetpack Compose/Material 3, Android Services, Gradle Kotlin DSL; Android 10+ (minSdk 29).
+- Anzeigename: TapStop; Application-ID und Kotlin-Package bleiben de.kf.blitztext.
+
+## APIs und Modelle
+- OpenAI: https://api.openai.com/v1 — POST /audio/transcriptions (whisper-1); POST /chat/completions (gpt-4o-mini).
+- Groq: https://api.groq.com/openai/v1 — dieselben Endpunkte; STT whisper-large-v3 oder whisper-large-v3-turbo; Rewrite openai/gpt-oss-120b.
+- Cloudzugriff direkt aus der App über HttpURLConnection, Bearer-Authentifizierung mit eigenen API-Keys; kein eigener Backend-Server.
+- Lokal: Whisper Large V3 Turbo FP16 über Qualcomm VoiceAI/QAIRT/QNN auf der NPU; benötigt separat importierte Modelle (~2,2 GB) und einen Build mit lizenzierter Runtime.
+- Lokale Targets: SM8650/HTP V75 (Galaxy S24 Ultra) und SM8845/SM8845P/HTP V81 (HONOR MagicPad 4); keine allgemeine Snapdragon-Kompatibilität.
+- STT- und Rewrite-Provider sind getrennt wählbar; kein automatischer Cloud-Fallback.
+
+## Architektur
+Quellcode: app/src/main/java/de/kf/blitztext/
+- MainActivity.kt + Dashboard.kt: Compose-Oberfläche für Einstellungen, Provider, Modellimport und Nutzungsstatistik.
+- OverlayService.kt + BubbleGesture.kt + Mode.kt: Mikrofon-Foreground-Service, Blase/Gesten, Moduswahl und Verarbeitung auf einem Hintergrund-Worker.
+- AudioRecording.kt: Cloudaufnahme als AAC/M4A; lokale Aufnahme als PCM16-WAV, mono, 16 kHz, maximal 30 Sekunden.
+- SpeechToTextProvider.kt: gemeinsame STT-Schnittstelle, Provider-Factory und DictationProcessor für STT → optionales Rewrite.
+- ApiClient.kt: Cloud-STT, Rewrite-Anfragen und modusspezifische Prompts.
+- QualcommRuntime.kt + QualcommSession.kt: prozessweite lokale Engine und Lifecycle; QualcommTargets.kt + QualcommModelStore.kt: Gerätezuordnung, Modellimport und Integritätsprüfung.
+- TextInsertService.kt: Accessibility-Service; Einfügen über InputConnection bzw. ACTION_SET_TEXT; OverlayService stellt bei Fehlschlag die Zwischenablage bereit.
+- Settings.kt: SharedPreferences und API-Key-Verschlüsselung mit Android Keystore/AES-GCM.
+- UsageStats.kt: lokale SQLite-Datenbank usage.db (Schema 1), Wortzahlen, Zeiten und Erfolgsmetriken.
+- Datenfluss: Mikrofon → Audiodatei → STT → optionales Cloud-Rewrite → Texteingabe/Clipboard → lokale Statistik; temporäre Audiofiles werden anschließend gelöscht.
+
+## Daten und Grenzen
+- Lokal + Roh sendet weder Audio noch Transkript an Cloudprovider; lokale Modi mit Rewrite senden das Transkript; Cloud-STT sendet Audio.
+- Lokale Erkennung kann nahe der 30-Sekunden-Grenze mit SPECTROGRAM FAIL scheitern; dann keine Teiltexteinfügung und kein Rewrite.
+- Statistik ist lokal, ohne Telemetrie; Android-Backups und Geräteübertragung sind deaktiviert.
+- Modellgewichte, proprietäre Qualcomm-Binaries, API-Keys und Signaturschlüssel gehören nicht ins Repository.
+
+## Einstieg und Build
+- README.md: Nutzung, Provider, Datenschutz, Datenkompatibilität und Statistikdetails.
+- docs/QUALCOMM_LOCAL_STT.md + docs/QUALCOMM_LICENSING.md: lokale Runtime, Modellimport, Einschränkungen und Lizenzen.
+- DEVICE_TESTS.md + INSERT_DEVICE_TESTS.md: dokumentierte Geräteprüfungen.
+- Buildvoraussetzungen: JDK 17 und Android SDK 36; JAVA_HOME auf JDK 17 setzen.
+- Build/Checks: ./gradlew assembleDebug lint testDebugUnitTest packageTapStop
+- Tests: app/src/test/ (JUnit/Robolectric), app/src/androidTest/ und scripts/device-tests.py (Gerätetests).
+- Optionaler Runtime-Build: -PqualcommRuntimeDir=/path/to/local-runtime; siehe tools/qualcomm-whisper/README.md.
