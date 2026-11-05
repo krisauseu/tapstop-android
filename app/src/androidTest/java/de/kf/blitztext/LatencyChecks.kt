@@ -155,7 +155,7 @@ internal fun StatsInstrumentation.runLatencyChecks(arguments: Bundle) {
         val manualPlus = arguments.getString("manualPlusCount", "0").toInt().coerceIn(0, 3)
         if (manualRaw + manualPlus > 0) {
             runOnMainSync {
-                OverlayService::class.java.getDeclaredMethod("addBubble").apply { isAccessible = true }.invoke(overlay)
+                checkNotNull(TextInsertService.instance) { "Accessibility service not connected" }.showBubble(overlay)
             }
             for ((mode, count) in listOf(Mode.BLITZTEXT to manualRaw, Mode.PLUS to manualPlus)) {
                 modeOverride = mode

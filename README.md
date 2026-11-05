@@ -54,17 +54,19 @@ Modellimport, lokale SDK-Builds, Grenzen und Erweiterung auf weitere SoCs: [Qual
 
 1. APK als Update installieren und einen STT-Provider auswählen. Für OpenAI, Groq oder Gemini den passenden API-Key speichern; für Local das passende Modellpaket über **Modellordner importieren** auswählen.
 2. Bei Groq zwischen Whisper Large V3 und Large V3 Turbo wählen. Bei Local das Modell prüfen/vorbereiten; die erste Initialisierung benötigt zusätzliche Zeit. Für Plus/Chat/Formal einen Cloudprovider für die Textüberarbeitung konfigurieren.
-3. Mikrofon und „Über anderen Apps anzeigen“ erlauben. Für direktes Einfügen **TapStop Texteingabe** unter Bedienungshilfen aktivieren.
+3. Mikrofonzugriff erlauben und **TapStop Texteingabe** unter Bedienungshilfen aktivieren. Die Bedienungshilfe stellt die Blase dar und ermöglicht direktes Einfügen.
 4. Die Overlay-Blase aus der sichtbaren App starten und in einer anderen App ein Textfeld fokussieren.
 5. Blase tippen, sprechen, erneut tippen. Während der Aufnahme wird die Blase rot, während der Verarbeitung blau.
 
-Die Android-Plattform beschränkt Mikrofon-Foreground-Services. Nach einem Neustart oder wenn Android den Service beendet, die Blase in TapStop erneut starten.
+Wird die Bedienungshilfe getrennt, verschwinden Blase und Fächer. Solange der Mikrofon-Dienst läuft, erscheint die Blase beim erneuten Verbinden wieder. Über **Blase beenden** lässt sich der Dienst in TapStop auch bei getrennter Bedienungshilfe stoppen. Nach einem Geräteneustart oder wenn Android den Mikrofon-Dienst beendet, die Blase aus der sichtbaren App erneut starten.
 
 ## Version und Build
 
+**0.11** (`versionCode=11`) stellt Blase und Modusfächer auf Androids `TYPE_ACCESSIBILITY_OVERLAY` um. Die separate Android-Berechtigung „Über anderen Apps anzeigen“ entfällt.
+
 **0.10** (`versionCode=10`) ergänzt Gemini 3.5 Transcribe. Die getrennte Auswahl von Spracherkennung und Rewrite erlaubt beispielsweise Gemini für STT und Groq für Plus, Chat oder Formal. Das [persönliche Wörterbuch](docs/PERSONAL_DICTIONARY.md) ergänzt die unterstützten Cloud-Pfade.
 
-Die installierbare APK steht im [GitHub-Release v0.10](https://github.com/krisauseu/tapstop-android/releases/tag/v0.10) bereit.
+Die installierbare APK steht im [GitHub-Release v0.11](https://github.com/krisauseu/tapstop-android/releases/tag/v0.11) bereit.
 
 SDK 36 und JDK 17 sind erforderlich. Für den Build muss `JAVA_HOME` auf JDK 17 zeigen. Mit Android Studio öffnen oder ausführen:
 
@@ -72,7 +74,7 @@ SDK 36 und JDK 17 sind erforderlich. Für den Build muss `JAVA_HOME` auf JDK 17 
 ./gradlew assembleDebug lint testDebugUnitTest packageTapStop
 ```
 
-Die Standardausgabe ist `app/build/outputs/apk/debug/app-debug.apk`; die benannte APK liegt unter **`app/build/outputs/apk/tapstop/TapStop-Android-0.10.apk`**. Sie wird weiterhin mit dem vorhandenen lokalen Debug-Schlüssel signiert. Für Updates auf eine bisherige Installation muss dieselbe Signatur verwendet werden; ein anderer Rechner hat üblicherweise einen anderen Debug-Schlüssel. Signaturschlüssel gehören nicht ins Repository.
+Die Standardausgabe ist `app/build/outputs/apk/debug/app-debug.apk`; die benannte APK liegt unter **`app/build/outputs/apk/tapstop/TapStop-Android-0.11.apk`**. Sie wird weiterhin mit dem vorhandenen lokalen Debug-Schlüssel signiert. Für Updates auf eine bisherige Installation muss dieselbe Signatur verwendet werden; ein anderer Rechner hat üblicherweise einen anderen Debug-Schlüssel. Signaturschlüssel gehören nicht ins Repository.
 
 Ein Build mit lokal bereitgestellter Qualcomm-Runtime verwendet zusätzlich `-PqualcommRuntimeDir=/path/to/local-runtime`. Struktur und Werkzeuge stehen in [tools/qualcomm-whisper](tools/qualcomm-whisper/README.md). Qualcomm-Dateien und Modellgewichte gehören nicht ins öffentliche Repository.
 

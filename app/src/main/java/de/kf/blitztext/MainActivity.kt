@@ -3,7 +3,6 @@ package de.kf.blitztext
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings as AndroidSettings
@@ -72,8 +71,8 @@ class MainActivity : ComponentActivity() {
 
     private fun launchBubble() {
         if (!hasMicrophone()) { microphone.launch(Manifest.permission.RECORD_AUDIO); return }
-        if (!AndroidSettings.canDrawOverlays(this)) {
-            startActivity(Intent(AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        if (TextInsertService.instance == null) {
+            startActivity(Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS))
             return
         }
         if (settings.provider.isCloud && settings.apiKey().isBlank()) {
@@ -118,8 +117,10 @@ class MainActivity : ComponentActivity() {
         var provider by remember { mutableStateOf(settings.provider) }
         var groqModel by remember { mutableStateOf(settings.groqModel) }
         val micOk = hasMicrophone()
-        val overlayOk = AndroidSettings.canDrawOverlays(this)
-        val accessibilityOk = TextInsertService.instance != null
+        val accessibility by TextInsertService.connection.collectAsState()
+        val accessibilityOk = accessibility != null
+        val recordingService by OverlayService.active.collectAsState()
+        val running = recordingService != null
         Scaffold { padding ->
             Column(
                 modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
@@ -199,18 +200,19 @@ class MainActivity : ComponentActivity() {
                 Spacer(Modifier.height(6.dp))
                 Text("Berechtigungen", style = MaterialTheme.typography.titleMedium)
                 PermissionRow("Mikrofon", micOk) { microphone.launch(Manifest.permission.RECORD_AUDIO) }
-                PermissionRow("Über anderen Apps anzeigen", overlayOk) {
-                    startActivity(Intent(AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-                }
-                PermissionRow("Bedienungshilfe für direktes Einfügen", accessibilityOk) {
+                PermissionRow("Bedienungshilfe für Blase und direktes Einfügen", accessibilityOk) {
                     startActivity(Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS))
                 }
-                Text("Ohne Bedienungshilfe wird der Text in die Zwischenablage kopiert.", style = MaterialTheme.typography.bodySmall)
+                Text("Aktiviere „TapStop Texteingabe“ für die Blase. Wenn direktes Einfügen fehlschlägt, wird der Text in die Zwischenablage kopiert.", style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(8.dp))
                 Button(onClick = { launchBubble() }, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (OverlayService.running) "Blase ist aktiv" else "Floating-Blase starten")
+                    Text(when {
+                        !running -> "Floating-Blase starten"
+                        accessibilityOk -> "Blase ist aktiv"
+                        else -> "Blase pausiert · Bedienungshilfe aktivieren"
+                    })
                 }
-                if (OverlayService.running) {
+                if (running) {
                     OutlinedButton(onClick = {
                         stopService(Intent(this@MainActivity, OverlayService::class.java))
                         refresh++

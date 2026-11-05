@@ -2,15 +2,20 @@ package de.kf.blitztext
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.InputMethod
+import android.content.Intent
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class TextInsertService : AccessibilityService() {
     private val main = Handler(Looper.getMainLooper())
+    private var bubbleOverlay: BubbleOverlay? = null
     private var target: AccessibilityNodeInfo? = null
     private var lastFocused: AccessibilityNodeInfo? = null
     @Volatile internal var diagnosticSession = 0L
@@ -23,7 +28,43 @@ class TextInsertService : AccessibilityService() {
         { task -> Thread(task, "TapStopDelayedReadback").apply { isDaemon = true } },
         java.util.concurrent.ThreadPoolExecutor.AbortPolicy())
 
-    override fun onServiceConnected() { instance = this }
+    override fun onServiceConnected() {
+        connectedService.value = this
+        OverlayService.active.value?.attachBubble(this)
+    }
+
+    internal fun showBubble(recording: OverlayService) {
+        if (bubbleOverlay?.recording === recording) return
+        hideBubble()
+        bubbleOverlay = BubbleOverlay(this, recording).also { it.attach() }
+    }
+
+    internal fun renderBubble(recording: OverlayService) {
+        bubbleOverlay?.takeIf { it.recording === recording }?.render()
+    }
+
+    internal fun hideBubble(recording: OverlayService? = null) {
+        val overlay = bubbleOverlay ?: return
+        if (recording != null && overlay.recording !== recording) return
+        bubbleOverlay = null
+        overlay.detach()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        bubbleOverlay?.onConfigurationChanged()
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        disconnectOverlay()
+        return super.onUnbind(intent)
+    }
+
+    private fun disconnectOverlay() {
+        hideBubble()
+        if (connectedService.value === this) connectedService.value = null
+    }
+
     // Framework callback introduced in Android 13; never invoked on older releases.
     @android.annotation.TargetApi(33)
     override fun onCreateInputMethod(): InputMethod = object : InputMethod(this) {
@@ -51,7 +92,7 @@ class TextInsertService : AccessibilityService() {
         diagnosticReader.shutdownNow()
         target = null
         lastFocused = null
-        instance = null
+        disconnectOverlay()
         super.onDestroy()
     }
 
@@ -289,7 +330,8 @@ class TextInsertService : AccessibilityService() {
     }
 
     companion object {
-        @Volatile var instance: TextInsertService? = null
-            private set
+        private val connectedService = MutableStateFlow<TextInsertService?>(null)
+        internal val connection = connectedService.asStateFlow()
+        val instance: TextInsertService? get() = connection.value
     }
 }

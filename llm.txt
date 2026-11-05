@@ -4,7 +4,7 @@
 
 ## Projekt
 - Native Android-App mit verschiebbarer Overlay-Blase, Texteingabe über Accessibility und Clipboard-Fallback.
-- Version 0.10 (versionCode 10), Update mit bisheriger Debug-Signatur.
+- Version 0.11 (versionCode 11), Update mit bisheriger Debug-Signatur.
 - Modi: Roh (STT ohne Rewrite), Plus (minimale Korrektur), Chat (lockere Nachricht), Formal (sachliche Überarbeitung).
 - Stack: Kotlin, Jetpack Compose/Material 3, Android Services, Gradle Kotlin DSL; Android 10+ (minSdk 29).
 - Anzeigename: TapStop; Application-ID und Kotlin-Package bleiben de.kf.blitztext.
@@ -21,12 +21,12 @@
 ## Architektur
 Quellcode: app/src/main/java/de/kf/blitztext/
 - MainActivity.kt + Dashboard.kt: Compose-Oberfläche für Einstellungen, Provider, Modellimport und Nutzungsstatistik.
-- OverlayService.kt + BubbleGesture.kt + Mode.kt: Mikrofon-Foreground-Service, Blase/Gesten, Moduswahl und Verarbeitung auf einem Hintergrund-Worker.
+- OverlayService.kt: Mikrofon-Foreground-Service und Verarbeitung auf einem Hintergrund-Worker. BubbleOverlay.kt + BubbleGesture.kt + Mode.kt: Blase, Gesten und Modusfächer als Accessibility-Overlay.
 - AudioRecording.kt: Cloudaufnahme als AAC/M4A; lokale Aufnahme als PCM16-WAV, mono, 16 kHz, maximal 30 Sekunden.
 - SpeechToTextProvider.kt: gemeinsame STT-Schnittstelle, Provider-Factory und DictationProcessor für STT → optionales Rewrite.
 - ApiClient.kt: Cloud-STT, Rewrite-Anfragen und modusspezifische Prompts.
 - QualcommRuntime.kt + QualcommSession.kt: prozessweite lokale Engine und Lifecycle; QualcommTargets.kt + QualcommModelStore.kt: Gerätezuordnung, Modellimport und Integritätsprüfung.
-- TextInsertService.kt: Accessibility-Service; Einfügen über InputConnection bzw. ACTION_SET_TEXT; OverlayService stellt bei Fehlschlag die Zwischenablage bereit.
+- TextInsertService.kt: Der verbundene Accessibility-Service verwaltet Blase und Fächer. Er fügt über InputConnection bzw. ACTION_SET_TEXT ein. OverlayService stellt bei Fehlschlag die Zwischenablage bereit.
 - Settings.kt: SharedPreferences und API-Key-Verschlüsselung mit Android Keystore/AES-GCM.
 - UsageStats.kt: lokale SQLite-Datenbank usage.db (Schema 1), Wortzahlen, Zeiten und Erfolgsmetriken.
 - Datenfluss: Mikrofon → Audiodatei → STT → optionales Cloud-Rewrite → Texteingabe/Clipboard → lokale Statistik; temporäre Audiofiles werden anschließend gelöscht.

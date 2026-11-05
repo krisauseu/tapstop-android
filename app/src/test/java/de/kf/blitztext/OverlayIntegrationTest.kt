@@ -1,9 +1,12 @@
 package de.kf.blitztext
 
+import android.Manifest
+import android.content.Intent
 import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
 import org.junit.Assert.*
@@ -13,6 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
@@ -24,20 +28,37 @@ import java.time.Duration
 @LooperMode(LooperMode.Mode.PAUSED)
 class OverlayIntegrationTest {
     private lateinit var service: OverlayService
+    private lateinit var accessibility: TextInsertService
+    private lateinit var overlay: BubbleOverlay
     private lateinit var bubble: TextView
     private var downTime = 0L
 
     @Before fun setUp() {
         service = Robolectric.buildService(OverlayService::class.java).create().get()
-        OverlayService::class.java.getDeclaredMethod("addBubble").apply { isAccessible = true }.invoke(service)
+        accessibility = Robolectric.buildService(TextInsertService::class.java).create().get()
+        connect(accessibility)
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        service.onStartCommand(null, 0, 1)
+        overlay = attachedOverlay(accessibility)!!
         bubble = field("bubble") as TextView
         shadowOf(Looper.getMainLooper()).idle()
         ShadowToast.reset()
     }
 
-    @After fun tearDown() { service.onDestroy() }
+    @After fun tearDown() {
+        if (OverlayService.active.value === service) service.onDestroy()
+        accessibility.onDestroy()
+    }
 
-    private fun field(name: String): Any? = OverlayService::class.java.getDeclaredField(name).apply { isAccessible = true }.get(service)
+    private fun connect(owner: TextInsertService) {
+        TextInsertService::class.java.getDeclaredMethod("onServiceConnected").apply { isAccessible = true }.invoke(owner)
+    }
+
+    private fun attachedOverlay(owner: TextInsertService): BubbleOverlay? =
+        TextInsertService::class.java.getDeclaredField("bubbleOverlay").apply { isAccessible = true }.get(owner) as BubbleOverlay?
+
+    private fun field(name: String): Any? =
+        BubbleOverlay::class.java.getDeclaredField(name).apply { isAccessible = true }.get(overlay)
     private fun event(action: Int, x: Float = 25f, y: Float = 25f) {
         if (action == MotionEvent.ACTION_DOWN) downTime = SystemClock.uptimeMillis()
         MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0).also {
@@ -143,9 +164,42 @@ class OverlayIntegrationTest {
         Mode.entries.forEach { mode ->
             settings.mode = mode
             shadowOf(Looper.getMainLooper()).idle()
-            assertEquals(mode, (field("settings") as Settings).mode)
             assertEquals(mode, Settings(service).mode)
             assertTrue(bubble.contentDescription.toString().startsWith("${mode.label}."))
+        }
+    }
+
+    @Test fun bothWindowsUseAccessibilityOverlayType() {
+        val fan = openFan()
+        assertEquals(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, (bubble.layoutParams as WindowManager.LayoutParams).type)
+        assertEquals(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, (fan.layoutParams as WindowManager.LayoutParams).type)
+    }
+
+    @Test fun reconnectReplacesBothWindowsAndKeepsRecordingService() {
+        val fan = openFan()
+        connect(accessibility)
+        service.onStartCommand(null, 0, 2)
+        assertSame(overlay, attachedOverlay(accessibility))
+
+        accessibility.onUnbind(Intent())
+        shadowOf(Looper.getMainLooper()).idle()
+        assertNull(attachedOverlay(accessibility))
+        assertNull(bubble.parent)
+        assertNull(fan.parent)
+        assertNull(TextInsertService.instance)
+        assertSame(service, OverlayService.active.value)
+
+        val replacement = Robolectric.buildService(TextInsertService::class.java).create().get()
+        connect(replacement)
+        try {
+            assertNotNull(attachedOverlay(replacement))
+            assertNotSame(overlay, attachedOverlay(replacement))
+            service.onDestroy()
+            assertNull(attachedOverlay(replacement))
+            connect(replacement)
+            assertNull(attachedOverlay(replacement))
+        } finally {
+            replacement.onDestroy()
         }
     }
 }

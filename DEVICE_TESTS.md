@@ -1,3 +1,24 @@
+# TapStop 0.11 – Accessibility-Overlay am 5. November 2026
+
+Geprüft auf dem per USB verbundenen **HONOR YLE-W09**, Android API 36, Chrome 156. Die Bedienungshilfe `TextInsertService` besitzt jetzt die Fenster für Blase und Modusfächer. Der Mikrofon-Foreground-Service startet weiterhin aus der sichtbaren App und verarbeitet das Diktat. Eine getrennte Bedienungshilfe entfernt beide Fenster. Bei erneuter Verbindung erscheint die Blase wieder, solange der Mikrofon-Dienst läuft. Die Einfügepfade über InputConnection, Accessibility und Clipboard-Fallback wurden beibehalten.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Build und Tests | `testDebugUnitTest lint packageTapStop assembleDebugAndroidTest` mit bestehender Qualcomm-Runtime erfolgreich. 111 JVM-/Robolectric-Tests und 18 Python-Tests (Diagnose und Qualcomm-Vertragstests) bestanden. Lint meldete 0 Fehler und 28 Warnungen. |
+| Update | `adb install -r` von 0.9 auf 0.11 erfolgreich. Application-ID `de.kf.blitztext` und Zertifikat stimmen mit 0.9 und 0.10 überein. Direkt nach dem Update waren `settings.xml` und `usage.db` bytegleich. Der vorhandene Provider-Key war in der Geräte-Instrumentierung weiter entschlüsselbar. |
+| Fenstertyp | `dumpsys window windows` zeigte für `TapStop-Blase` und `TapStop-Modusfächer` jeweils `ty=ACCESSIBILITY_OVERLAY` und eine sichtbare Oberfläche. Das APK-Manifest enthält kein `SYSTEM_ALERT_WINDOW`. |
+| Gesten und Persistenz | Einfaches Antippen startete und stoppte die Mikrofonaufnahme. Ziehen vom rechten zum linken Rand rastete ein. Langes Drücken öffnete den Fächer, alle vier Modi ließen sich auswählen und wurden gespeichert. Position und Modus blieben beim Stoppen und erneuten Starten erhalten. Die ursprünglichen Werte wurden nach dem Test wiederhergestellt. |
+| Dienst-Lebenszyklus | Drei Zyklen mit geöffnetem Fächer: Beim Deaktivieren verschwanden beide Fenster, der Mikrofon-Dienst blieb im Vordergrund. Nach Reaktivierung erschien jeweils genau eine Blase. Stopp in der App, Stopp bei getrennter Bedienungshilfe und Prozessneustart hinterließen keine Fenster. Nach Stopp bei getrennter Bedienungshilfe blieb die Blase beim Verbinden aus, bis sie in TapStop erneut gestartet wurde. Keine TapStop-Abstürze im Prüfzeitraum. |
+| Mikrofon in Chrome | Ein 6,15-s-Sprachclip wurde über den Lautsprecher abgespielt und vom Tablet-Mikrofon aufgenommen. Das Transkript erschien im zuvor leeren, fokussierten Chrome-Feld. Ein erster Versuch mit einer leeren Audiodatei auf dem Mac bestätigte die Mikrofonaktivierung, lieferte aber kein Transkript. |
+| Manuelles Einfügen in Chrome | Bei sichtbarer Blase je dreimal Text und ein 48×32-PNG aus der Zwischenablage per Android-Strg+V eingefügt. Chrome setzte den Text ins Textfeld und lieferte das PNG an den Paste-Handler des Bildeditors, der es anzeigte. In diesen sechs Versuchen trat der gemeldete Dialog nicht auf. |
+| Einfüge-Regression | `scripts/device-tests.py` bestand einschließlich nativer Einfügefälle und Clipboard-Fallback. Die Chrome-Suite bestand alle zwölf Fälle, sechs über InputConnection und sechs bei deaktivierter InputConnection über Accessibility. |
+
+Android behandelt Accessibility-Overlays laut [Fenstertyp-Referenz](https://developer.android.com/reference/android/view/WindowManager.LayoutParams) als vertrauenswürdig. Der sporadische Einfügedialog hatte keinen reproduzierbaren Ausgangsfall. Die erfolgreichen Stichproben zeigen, dass beide Paste-Arten unter den getesteten Bedingungen funktionieren. Ob der Dialog im Alltag erneut auftritt, bleibt offen.
+
+**Galaxy S24 Ultra (SM-S928B, Android API 37):** Dieselbe endgültige APK aktualisierte die vorhandene 0.10 per `adb install -r`. Direkt danach waren `settings.xml` und `usage.db` bytegleich. Auf dem S24 wurde das Update geprüft. Die Bedienungshilfe war nach dem Update deaktiviert.
+
+**APK:** `app/build/outputs/apk/tapstop/TapStop-Android-0.11.apk` · 47.906.076 Bytes · SHA-256 `8bbc83454ae37a4d32140523871d779dd14855739803dcadc82a6184ea348b58`. Die endgültige APK enthält zusätzlich den aktualisierten Hinweis in den Android-Bedienungshilfe-Einstellungen. Auf dieser APK wurden Build, JVM-Tests sowie Update und Dienst-Neustart erneut geprüft.
+
 # Geräteabnahme 0.9 — 5. Oktober 2026
 
 **Geräteabnahme abgeschlossen: Local/Roh und Local + Groq/Plus samt Texteingabe sind auf beiden Geräten vom Nutzer abgenommen. Auf beiden läuft derselbe endgültige APK-Stand mit geprüfter SDK-Fehlerbehandlung und bestandenen Browser-Fixtures; beide separaten PoC-Apps sind entfernt.** Die folgenden Werte stammen aus der integrierten TapStop-App, nicht aus den Forschungs-PoCs. Die bekannte SDK-Fehlerbedingung nahe 30 Sekunden und der frühere fehlgeschlagene MagicPad-Plus-Lauf bleiben unten ausdrücklich dokumentiert. Diese Abnahme ist keine Zusage, dass jedes Diktat bis 30 Sekunden erfolgreich transkribiert wird.
