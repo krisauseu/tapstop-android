@@ -11,17 +11,23 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 enum class Provider(val label: String) {
-    OPENAI("OpenAI"), GROQ("Groq"), QUALCOMM_LOCAL("Lokal – Qualcomm NPU");
+    OPENAI("OpenAI"), GROQ("Groq"), QUALCOMM_LOCAL("Lokal – Qualcomm NPU"), GEMINI("Google Gemini");
 
     val isCloud: Boolean get() = this != QUALCOMM_LOCAL
-    val statisticsId: String get() = if (isCloud) label else "qualcomm"
+    val supportsRewrite: Boolean get() = this == OPENAI || this == GROQ
+    val statisticsId: String get() = when (this) {
+        QUALCOMM_LOCAL -> "qualcomm"
+        GEMINI -> "Gemini"
+        else -> label
+    }
     val maxRecordingMs: Long? get() = if (isCloud) null else 30_000L
     fun sttModel(groqModel: GroqModel): String = when (this) {
         OPENAI -> "whisper-1"
         GROQ -> groqModel.id
+        GEMINI -> "gemini-3.5-transcribe"
         QUALCOMM_LOCAL -> "whisper-large-v3-turbo"
     }
-    companion object { val cloudProviders = listOf(OPENAI, GROQ) }
+    companion object { val rewriteProviders = listOf(OPENAI, GROQ) }
 }
 enum class GroqModel(val id: String) {
     LARGE_V3("whisper-large-v3"),
@@ -47,21 +53,22 @@ class Settings(context: Context) {
         get() = runCatching { Provider.valueOf(prefs.getString("provider", Provider.OPENAI.name)!!) }.getOrDefault(Provider.OPENAI)
         set(value) {
             prefs.edit().apply {
-                if (provider.isCloud) putString("last_cloud_provider", provider.name)
+                val last = value.takeIf { it.supportsRewrite } ?: provider.takeIf { it.supportsRewrite }
+                last?.let { putString("last_cloud_provider", it.name) }
                 putString("provider", value.name)
             }.apply()
         }
 
-    /** Unset preserves the historical cloud STT/rewrite pairing. Local uses the last cloud choice. */
+    /** Unset preserves the historical cloud STT/rewrite pairing. Gemini and local STT use the last rewrite-capable STT choice. */
     var rewriteProvider: Provider
         get() {
             val selected = prefs.getString("rewrite_provider", null)
-                ?: if (provider.isCloud) provider.name else prefs.getString("last_cloud_provider", Provider.OPENAI.name)
+                ?: if (provider.supportsRewrite) provider.name else prefs.getString("last_cloud_provider", Provider.OPENAI.name)
             return runCatching { Provider.valueOf(selected!!) }.getOrDefault(Provider.OPENAI)
-                .takeIf { it.isCloud } ?: Provider.OPENAI
+                .takeIf { it.supportsRewrite } ?: Provider.OPENAI
         }
         set(value) {
-            require(value.isCloud) { "Textüberarbeitung benötigt einen Cloudprovider." }
+            require(value.supportsRewrite) { "Textüberarbeitung benötigt OpenAI oder Groq." }
             prefs.edit().putString("rewrite_provider", value.name).apply()
         }
 
@@ -72,6 +79,10 @@ class Settings(context: Context) {
         get() = runCatching { GroqModel.valueOf(prefs.getString("groq_model", GroqModel.LARGE_V3_TURBO.name)!!) }
             .getOrDefault(GroqModel.LARGE_V3_TURBO)
         set(value) { prefs.edit().putString("groq_model", value.name).apply() }
+
+    var personalDictionary: String
+        get() = PersonalDictionary.normalize(prefs.getString("personal_dictionary", "").orEmpty())
+        set(value) { prefs.edit().putString("personal_dictionary", PersonalDictionary.normalize(value)).apply() }
 
     var bubbleY: Int
         get() = prefs.getInt("bubble_y", -1)
@@ -105,7 +116,12 @@ class Settings(context: Context) {
         prefs.edit().putString(keyName(provider), Base64.encodeToString(encrypted, Base64.NO_WRAP)).apply()
     }
 
-    private fun keyName(provider: Provider) = if (provider == Provider.OPENAI) "api_key" else "groq_api_key"
+    private fun keyName(provider: Provider) = when (provider) {
+        Provider.OPENAI -> "api_key"
+        Provider.GROQ -> "groq_api_key"
+        Provider.GEMINI -> "gemini_api_key"
+        Provider.QUALCOMM_LOCAL -> error("Lokale Spracherkennung verwendet keinen API-Key.")
+    }
 
     private fun secretKey(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }

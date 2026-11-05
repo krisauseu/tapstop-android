@@ -57,9 +57,19 @@ class LocalPipelineTest {
         assertTrue(runCatching { ApiClient(Provider.QUALCOMM_LOCAL, GroqModel.LARGE_V3_TURBO) }.isFailure)
     }
 
+    @Test fun incompatibleHardwareFailsBeforeNativeInitializationWithReadableStatus() {
+        val runtime = QualcommRuntime.get(context)
+        val failure = runCatching { runtime.prepare() }.exceptionOrNull()
+        assertNotNull(failure)
+        assertTrue(failure is Exception)
+        assertTrue(failure!!.message!!.contains("SoC"))
+        assertEquals(QualcommRuntimePhase.NOT_INITIALIZED, runtime.status.value.phase)
+        assertEquals(failure.message, runtime.status.value.message)
+    }
+
     @Test fun localOnlyRecordingLimitAndOriginalCloudModels() {
         assertEquals(30_000L, Provider.QUALCOMM_LOCAL.maxRecordingMs)
-        Provider.cloudProviders.forEach { assertNull(it.maxRecordingMs) }
+        Provider.rewriteProviders.forEach { assertNull(it.maxRecordingMs) }
         assertEquals("whisper-1", Provider.OPENAI.sttModel(GroqModel.LARGE_V3_TURBO))
         assertEquals("whisper-large-v3", Provider.GROQ.sttModel(GroqModel.LARGE_V3))
     }

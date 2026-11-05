@@ -13,7 +13,8 @@ enum class QualcommCompatibilityState {
 data class QualcommModelFile(val name: String, val sizeBytes: Long, val sha256: String)
 data class QualcommValidatedDevice(val manufacturer: String, val model: String)
 
-/** Only targets backed by both inspected contexts and successful physical device tests belong here. */
+/** These QNN contexts are compiled for a concrete SoC/HTP pair, not portable Whisper weights.
+ * Device validation below is informational and never controls selection. */
 data class QualcommTarget(
     val id: String,
     val socAliases: Set<String>,
@@ -81,7 +82,7 @@ object QualcommTargets {
         val soc = hardware.socModel.trim().uppercase(Locale.ROOT)
         val target = all.singleOrNull { soc in it.socAliases }
             ?: return QualcommCompatibility(QualcommCompatibilityState.UNSUPPORTED, null,
-                "Für dieses Gerät ist derzeit kein lokales Qualcomm-Modell verfügbar.")
+                "Für diesen SoC fehlt ein passendes Qualcomm-Modellpaket. Die vorhandenen Modelle sind SoC-spezifisch.")
         val vendor = hardware.socManufacturer.trim().uppercase(Locale.ROOT)
         if (vendor != "QTI" && vendor != "QUALCOMM" && !vendor.startsWith("QUALCOMM TECHNOLOGIES")) {
             return QualcommCompatibility(QualcommCompatibilityState.UNSUPPORTED, null,

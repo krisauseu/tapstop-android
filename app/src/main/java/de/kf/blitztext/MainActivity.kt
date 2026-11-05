@@ -112,11 +112,11 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun Screen() {
         val observed = refresh
-        var keyInput by remember { mutableStateOf("") }
+        var dictionaryInput by remember { mutableStateOf(settings.personalDictionary) }
+        var dictionaryNotice by remember { mutableStateOf<String?>(null) }
         val mode = settings.mode
         var provider by remember { mutableStateOf(settings.provider) }
         var groqModel by remember { mutableStateOf(settings.groqModel) }
-        var keySaved by remember { mutableStateOf(settings.apiKey().isNotBlank()) }
         val micOk = hasMicrophone()
         val overlayOk = AndroidSettings.canDrawOverlays(this)
         val accessibilityOk = TextInsertService.instance != null
@@ -129,45 +129,17 @@ class MainActivity : ComponentActivity() {
                 Text("Einmal tippen: aufnehmen. Noch einmal tippen: transkribieren und einfügen.")
                 Spacer(Modifier.height(8.dp))
                 Text("Spracherkennung", style = MaterialTheme.typography.titleMedium)
-                ModeRow("OpenAI", provider == Provider.OPENAI) {
-                    provider = Provider.OPENAI; settings.provider = provider
-                    keyInput = ""; keySaved = settings.apiKey(provider).isNotBlank()
-                }
-                ModeRow("Groq", provider == Provider.GROQ) {
-                    provider = Provider.GROQ; settings.provider = provider
-                    keyInput = ""; keySaved = settings.apiKey(provider).isNotBlank()
+                for (choice in Provider.entries.filter { it.isCloud }) {
+                    ModeRow(choice.label, provider == choice) {
+                        provider = choice
+                        settings.provider = choice
+                    }
                 }
                 QualcommSettings(provider == Provider.QUALCOMM_LOCAL, observed) {
-                    provider = Provider.QUALCOMM_LOCAL; settings.provider = provider
-                    keyInput = ""; keySaved = false
+                    provider = Provider.QUALCOMM_LOCAL
+                    settings.provider = provider
                 }
-                if (provider.isCloud) {
-                OutlinedTextField(
-                    value = keyInput,
-                    onValueChange = { keyInput = it },
-                    label = { Text("${provider.label} API-Key${if (keySaved) " (gespeichert)" else ""}") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        try {
-                            settings.setApiKey(keyInput, provider)
-                            keySaved = keyInput.isNotBlank()
-                            keyInput = ""
-                            Toast.makeText(this@MainActivity, "API-Key gespeichert", Toast.LENGTH_SHORT).show()
-                        } catch (e: Exception) {
-                            Toast.makeText(this@MainActivity, "Speichern fehlgeschlagen: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
-                        }
-                    }, enabled = keyInput.isNotBlank()) { Text("Key speichern") }
-                    OutlinedButton(onClick = {
-                        settings.setApiKey("", provider)
-                        keySaved = false
-                    }, enabled = keySaved) { Text("Key löschen") }
-                }
-                }
+                if (provider.isCloud) ProviderKeyEditor(provider)
                 Text("Transkription", style = MaterialTheme.typography.titleMedium)
                 if (provider == Provider.GROQ) {
                     ModeRow("Whisper Large V3", groqModel == GroqModel.LARGE_V3) {
@@ -176,12 +148,37 @@ class MainActivity : ComponentActivity() {
                     ModeRow("Whisper Large V3 Turbo", groqModel == GroqModel.LARGE_V3_TURBO) {
                         groqModel = GroqModel.LARGE_V3_TURBO; settings.groqModel = groqModel
                     }
-                } else Text(if (provider.isCloud) "OpenAI Whisper-1" else "Whisper Large V3 Turbo FP16", style = MaterialTheme.typography.bodyMedium)
+                } else Text(when (provider) {
+                    Provider.OPENAI -> "OpenAI Whisper-1"
+                    Provider.GEMINI -> "${provider.sttModel(groqModel)} · Deutsch (de-DE), wortgetreu"
+                    else -> "Whisper Large V3 Turbo FP16"
+                }, style = MaterialTheme.typography.bodyMedium)
+                Text("Persönliches Wörterbuch", style = MaterialTheme.typography.titleMedium)
+                Text("Ein Begriff oder Ausdruck pro Zeile. Nur lokal gespeichert. Bei Cloud-Verarbeitung werden passende Schreibweisen als Kontext mitgesendet.",
+                    style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(
+                    value = dictionaryInput,
+                    onValueChange = { dictionaryInput = it; dictionaryNotice = null },
+                    label = { Text("Eigennamen und Fachbegriffe") },
+                    minLines = 4, maxLines = 8,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text("Bis zu 200 Einträge / 8 KiB. OpenAI und Groq verwenden den Anfang bis zum STT-Prompt-Limit. Gemini und Qualcomm verwenden das Wörterbuch nur bei der Textüberarbeitung.",
+                    style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick = {
+                    val normalized = PersonalDictionary.normalize(dictionaryInput)
+                    val allEntries = dictionaryInput.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
+                    settings.personalDictionary = normalized
+                    dictionaryInput = normalized
+                    dictionaryNotice = if (normalized != allEntries) "Größenlimit erreicht. Nur vollständige Einträge vom Anfang gespeichert."
+                        else "Wörterbuch gespeichert."
+                }) { Text("Wörterbuch speichern") }
+                dictionaryNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 Text("Textüberarbeitung: Plus / Chat / Formal", style = MaterialTheme.typography.titleMedium)
-                ModeRow("Automatisch: ${if (provider.isCloud) "wie Spracherkennung" else "zuletzt gewählter Cloudprovider"}", settings.rewriteFollowsStt) {
+                ModeRow("Automatisch: ${if (provider.supportsRewrite) "wie Spracherkennung" else "zuletzt gewählter OpenAI-/Groq-STT-Anbieter"}", settings.rewriteFollowsStt) {
                     settings.followSttForRewrite(); refresh++
                 }
-                Provider.cloudProviders.forEach { choice ->
+                Provider.rewriteProviders.forEach { choice ->
                     ModeRow(choice.label, !settings.rewriteFollowsStt && settings.rewriteProvider == choice) {
                         settings.rewriteProvider = choice; refresh++
                     }
@@ -191,9 +188,8 @@ class MainActivity : ComponentActivity() {
                 if (provider == Provider.QUALCOMM_LOCAL) {
                     Text(if (mode.usesRewrite) "Spracherkennung lokal. Das Transkript wird anschließend zur Überarbeitung an ${settings.rewriteProvider.label} gesendet."
                         else "Roh: Keine Cloud-Verarbeitung.", style = MaterialTheme.typography.bodySmall)
-                    if (mode.usesRewrite && settings.apiKey(settings.rewriteProvider).isBlank())
-                        Text("Für die Überarbeitung bitte den Key unter ${settings.rewriteProvider.label} speichern.", color = MaterialTheme.colorScheme.error)
                 }
+                if (settings.rewriteProvider != provider) ProviderKeyEditor(settings.rewriteProvider)
                 Spacer(Modifier.height(6.dp))
                 Text("Modus", style = MaterialTheme.typography.titleMedium)
                 Mode.entries.forEach { choice ->
@@ -220,9 +216,69 @@ class MainActivity : ComponentActivity() {
                         refresh++
                     }, modifier = Modifier.fillMaxWidth()) { Text("Blase beenden") }
                 }
+                if (BuildConfig.DEBUG) {
+                    var diagnosis by remember { mutableStateOf(DelayedInsertDiagnostics.enabled(this@MainActivity)) }
+                    var audioDiagnosis by remember { mutableStateOf(AudioSttDiagnostics.enabled(this@MainActivity)) }
+                    var markerNotice by remember { mutableStateOf<String?>(null) }
+                    Text("Temporäre Insert-Textdiagnose", style = MaterialTheme.typography.titleMedium)
+                    Text("Speichert vollständige Diktate und zurückgelesene Editor-Ausschnitte nur lokal, ohne Backup. Ringpuffer bis 32 MiB; Altersbereinigung beim Schreiben; keine Audiodaten. Deaktivieren stoppt neue Aufzeichnungen, vorhandene Daten bleiben erhalten.", style = MaterialTheme.typography.bodySmall)
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Switch(checked = diagnosis, onCheckedChange = {
+                            DelayedInsertDiagnostics.setEnabled(this@MainActivity, it); diagnosis = it
+                        })
+                        Text(if (diagnosis) "Textdiagnose aktiv" else "Textdiagnose deaktiviert")
+                    }
+                    Text("Originalaudio für Diagnose speichern", style = MaterialTheme.typography.titleMedium)
+                    Text("Vollständige STT-Eingabedateien und Transkripte lokal ohne Backup. Bis 500 MiB; unmarkierte Fälle bis 14 Tage, Bereinigung bei Diagnosearbeit. Fehlerfälle bevorzugt erhalten. Deaktivieren bewahrt vorhandene Daten.", style = MaterialTheme.typography.bodySmall)
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Switch(checked = audioDiagnosis, onCheckedChange = {
+                            AudioSttDiagnostics.setEnabled(this@MainActivity, it); audioDiagnosis = it
+                        })
+                        Text(if (audioDiagnosis) "Audiodiagnose aktiv" else "Audiodiagnose deaktiviert")
+                    }
+                    OutlinedButton(enabled = diagnosis || audioDiagnosis, onClick = {
+                        markerNotice = DelayedInsertDiagnostics.mark(this@MainActivity)
+                    }) { Text("Letzten Einfügefehler markieren") }
+                    if (audioDiagnosis) OutlinedButton(onClick = {
+                        markerNotice = AudioSttDiagnostics.mark(this@MainActivity, null, "NO_INSERT", System.currentTimeMillis())
+                    }) { Text("Letzte abgeschlossene Aufnahme markieren") }
+                    Text("Bei STT-Fehler ohne Einfügung die letzte abgeschlossene Aufnahme ausdrücklich auswählen. Zuerst selbst einen Screenshot erstellen, danach markieren. Es wird nur die letzte Einfügung als Kandidat zugeordnet.", style = MaterialTheme.typography.bodySmall)
+                    markerNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                }
                 StatisticsSettings(UsageStats.get(this@MainActivity))
                 @Suppress("UNUSED_VARIABLE") val keepObserved = observed
             }
+        }
+    }
+
+    @Composable
+    private fun ProviderKeyEditor(provider: Provider) {
+        var keyInput by remember(provider) { mutableStateOf("") }
+        val keySaved = remember(provider, refresh) { settings.apiKey(provider).isNotBlank() }
+        OutlinedTextField(
+            value = keyInput,
+            onValueChange = { keyInput = it },
+            label = { Text("${provider.label} API-Key${if (keySaved) " (gespeichert)" else ""}") },
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = {
+                try {
+                    settings.setApiKey(keyInput, provider)
+                    keyInput = ""
+                    refresh++
+                    Toast.makeText(this@MainActivity, "API-Key gespeichert", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "Speichern fehlgeschlagen: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                }
+            }, enabled = keyInput.isNotBlank()) { Text("Key speichern") }
+            OutlinedButton(onClick = {
+                settings.setApiKey("", provider)
+                refresh++
+            }, enabled = keySaved) { Text("Key löschen") }
         }
     }
 

@@ -25,12 +25,13 @@ internal class CloudSpeechToTextProvider(
     private val provider: Provider,
     private val model: GroqModel,
     private val key: String,
-    private val client: ApiClient
+    private val client: ApiClient,
+    private val dictionary: String = ""
 ) : SpeechToTextProvider {
-    init { require(provider.isCloud) }
+    init { require(provider.supportsRewrite) }
     override fun transcribe(audio: File): SttResult {
         val started = SystemClock.elapsedRealtime()
-        val raw = client.transcribe(audio, key)
+        val raw = client.transcribe(audio, key, dictionary)
         return SttResult(raw, sttMs = SystemClock.elapsedRealtime() - started,
             provider = provider, model = provider.sttModel(model))
     }
@@ -39,9 +40,11 @@ internal class CloudSpeechToTextProvider(
 
 internal object SpeechToTextProviders {
     fun create(context: Context, provider: Provider, model: GroqModel, key: String,
-               diagnostic: DictationTrace? = null): SpeechToTextProvider = when (provider) {
+               diagnostic: DictationTrace? = null,
+               dictionary: String = Settings(context).personalDictionary): SpeechToTextProvider = when (provider) {
         Provider.OPENAI, Provider.GROQ -> CloudSpeechToTextProvider(provider, model, key,
-            ApiClient(provider, model).also { it.diagnostic = diagnostic })
+            ApiClient(provider, model).also { it.diagnostic = diagnostic }, dictionary)
+        Provider.GEMINI -> GeminiSpeechToTextProvider(key, diagnostic)
         Provider.QUALCOMM_LOCAL -> QualcommRuntime.get(context)
     }
 }

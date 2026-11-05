@@ -12,20 +12,32 @@ import java.time.ZoneId
 /** Runs without another testing dependency; fixtures use a separate disposable database. */
 class StatsInstrumentation : Instrumentation() {
     private val report = StringBuilder()
+    private var latencyArguments: Bundle? = null
     private var localArguments: Bundle? = null
     private var browserInput = false
     private var accessibilityOnly = false
     private var statisticsOnly = false
+    private var verifyPreservedData = false
+    private var geminiArguments: Bundle? = null
+    private var delayedDiagnostics = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
+        if (arguments?.getString("latencyReplay") == "true") latencyArguments = arguments
         if (arguments?.getString("localRuntime") == "true") localArguments = arguments
         browserInput = arguments?.getString("browserInput") == "true"
         accessibilityOnly = arguments?.getString("accessibilityOnly") == "true"
         statisticsOnly = arguments?.getString("statisticsOnly") == "true"
+        verifyPreservedData = arguments?.getString("verifyPreservedData") == "true"
+        delayedDiagnostics = arguments?.getString("delayedDiagnostics") == "true"
+        if (arguments?.getString("geminiReplay") == "true") geminiArguments = arguments
         start()
     }
     override fun onStart() {
+        geminiArguments?.let { runGeminiDeviceReplay(it); return }
+        if (delayedDiagnostics) { runDelayedDiagnosticChecks(); return }
+        if (verifyPreservedData) { runPreservedDataChecks(); return }
         localArguments?.let { runLocalRuntimeChecks(it); return }
+        latencyArguments?.let { runLatencyChecks(it); return }
         if (browserInput) {
             runBrowserInputChecks(accessibilityOnly)
             return

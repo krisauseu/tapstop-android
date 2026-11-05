@@ -18,8 +18,8 @@ android {
         applicationId = "de.kf.blitztext"
         minSdk = 29
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.9"
+        versionCode = 10
+        versionName = "0.10"
         testInstrumentationRunner = "de.kf.blitztext.StatsInstrumentation"
     }
 

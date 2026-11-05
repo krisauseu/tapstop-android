@@ -4,6 +4,7 @@
 
 ## Projekt
 - Native Android-App mit verschiebbarer Overlay-Blase, Texteingabe über Accessibility und Clipboard-Fallback.
+- Version 0.10 (versionCode 10), Update mit bisheriger Debug-Signatur.
 - Modi: Roh (STT ohne Rewrite), Plus (minimale Korrektur), Chat (lockere Nachricht), Formal (sachliche Überarbeitung).
 - Stack: Kotlin, Jetpack Compose/Material 3, Android Services, Gradle Kotlin DSL; Android 10+ (minSdk 29).
 - Anzeigename: TapStop; Application-ID und Kotlin-Package bleiben de.kf.blitztext.
@@ -11,6 +12,7 @@
 ## APIs und Modelle
 - OpenAI: https://api.openai.com/v1 — POST /audio/transcriptions (whisper-1); POST /chat/completions (gpt-4o-mini).
 - Groq: https://api.groq.com/openai/v1 — dieselben Endpunkte; STT whisper-large-v3 oder whisper-large-v3-turbo; Rewrite openai/gpt-oss-120b.
+- Gemini: gemini-3.5-transcribe, Interactions API, wortgetreu mit de-DE; Rewrite separat über OpenAI oder Groq.
 - Cloudzugriff direkt aus der App über HttpURLConnection, Bearer-Authentifizierung mit eigenen API-Keys; kein eigener Backend-Server.
 - Lokal: Whisper Large V3 Turbo FP16 über Qualcomm VoiceAI/QAIRT/QNN auf der NPU; benötigt separat importierte Modelle (~2,2 GB) und einen Build mit lizenzierter Runtime.
 - Lokale Targets: SM8650/HTP V75 (Galaxy S24 Ultra) und SM8845/SM8845P/HTP V81 (HONOR MagicPad 4); keine allgemeine Snapdragon-Kompatibilität.
@@ -33,6 +35,7 @@ Quellcode: app/src/main/java/de/kf/blitztext/
 - Lokal + Roh sendet weder Audio noch Transkript an Cloudprovider; lokale Modi mit Rewrite senden das Transkript; Cloud-STT sendet Audio.
 - Lokale Erkennung kann nahe der 30-Sekunden-Grenze mit SPECTROGRAM FAIL scheitern; dann keine Teiltexteinfügung und kein Rewrite.
 - Statistik ist lokal, ohne Telemetrie; Android-Backups und Geräteübertragung sind deaktiviert.
+- Audio-/Textdiagnose: getrennte Schalter, private Daten unter no_backup; bei beiden ausgeschalteten Schaltern keine neuen Diagnosedateien.
 - Modellgewichte, proprietäre Qualcomm-Binaries, API-Keys und Signaturschlüssel gehören nicht ins Repository.
 
 ## Einstieg und Build

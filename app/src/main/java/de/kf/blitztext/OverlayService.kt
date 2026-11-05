@@ -55,6 +55,7 @@ class OverlayService : Service() {
     private var audioFile: File? = null
     private var phase = Phase.IDLE
     private var trace: DictationTrace? = null
+    private var audioTrace: AudioSttTrace? = null
     private var downX = 0f
     private var downY = 0f
     private var initialX = 0
@@ -343,7 +344,9 @@ class OverlayService : Service() {
             audioFile = newRecorder.file
             // STT is pinned at capture start: format, limit and audio privacy cannot change mid-dictation.
             recordingProvider = provider
+            audioTrace = AudioSttDiagnostics.begin(this)
             newRecorder.start()
+            audioTrace?.event("RECORDER_STARTED")
             recordingStarted = SystemClock.elapsedRealtime()
             phase = Phase.RECORDING
             vibrate()
@@ -354,6 +357,7 @@ class OverlayService : Service() {
             recordingProvider = null
             phase = Phase.IDLE
             render()
+            audioTrace?.event("RECORDING_FAILED"); audioTrace = null
             toast("Aufnahme fehlgeschlagen: ${e.localizedMessage}")
         }
     }
@@ -385,6 +389,7 @@ class OverlayService : Service() {
                     recorder = null
                     result.onSuccess { finishRecording(file, ended, it, configuration) }.onFailure {
                         audioFile = null; file?.delete(); recordingProvider = null
+                        audioTrace?.event("RECORDING_FAILED"); audioTrace = null
                         toast("Aufnahme fehlgeschlagen: ${it.localizedMessage}"); reset()
                     }
                 }
@@ -393,7 +398,10 @@ class OverlayService : Service() {
     }
 
     private fun finishRecording(file: File?, recordingEnded: Long, capturedMs: Long?, configuration: ProcessingConfiguration) {
+        val audioDiagnostic = audioTrace
+        audioTrace = null
         val diagnostic = DictationTrace.create()
+        diagnostic?.audioDiagnostic = audioDiagnostic
         trace = diagnostic
         diagnostic?.event("recording_stop_requested")
         var recordingMs = capturedMs ?: (recordingEnded - recordingStarted).coerceAtLeast(0)
@@ -404,6 +412,7 @@ class OverlayService : Service() {
             recorder?.release(); recorder = null
             audioFile = null
             if (file == null || file.length() == 0L) error("Keine Aufnahme vorhanden.")
+            runCatching { audioDiagnostic?.finalized(file, recordingMs, configuration.provider, configuration.model) }
             diagnostic?.event("audio_finalized", "audio_ms=$recordingMs audio_bytes=${file.length()}")
             phase = Phase.PROCESSING
             vibrate()
@@ -418,11 +427,12 @@ class OverlayService : Service() {
             val stt = sttProviderFactory(provider, groqModel, key, diagnostic)
             val rewriteProvider = configuration.rewriteProvider
             val rewriteKey = configuration.rewriteKey
+            val dictionary = settings.personalDictionary
             val rewriteClient = if (mode.usesRewrite) ApiClient(rewriteProvider, groqModel).also { it.diagnostic = diagnostic } else null
             val processor = DictationProcessor(stt,
                 rewrite = { text, selectedMode ->
                     check(rewriteKey.isNotBlank()) { "${rewriteProvider.label} API-Key für die Überarbeitung fehlt." }
-                    requireNotNull(rewriteClient).rewrite(text, rewriteKey, selectedMode)
+                    requireNotNull(rewriteClient).rewrite(text, rewriteKey, selectedMode, dictionary)
                 }, cancelRewrite = { rewriteClient?.cancel() })
             activeProcessor = processor
             val rawTranscript = AtomicReference<String?>(null)
@@ -440,6 +450,7 @@ class OverlayService : Service() {
                     diagnostic?.snapshot("watchdog_timeout")
                     processingToken++
                     UsageStats.get(this).record(metrics.get())
+                    audioDiagnostic?.event("PROCESSING_TIMEOUT")
                     processor.cancel()
                     worker.shutdownNow()
                     worker = Executors.newSingleThreadExecutor()
@@ -465,10 +476,13 @@ class OverlayService : Service() {
                 try {
                     val processed = processor.process(file, mode) { transcript ->
                         raw = transcript.rawTranscript
+                        audioDiagnostic?.event("STT_RESULT", org.json.JSONObject().put("raw_transcript", transcript.rawTranscript)
+                            .put("stt_provider", transcript.provider.name).put("stt_model", transcript.model).put("stt_ms", transcript.sttMs))
                         metrics.set(metrics.get().copy(rawWords = countWords(transcript.rawTranscript), sttMs = transcript.sttMs))
                         rawTranscript.set(transcript.rawTranscript)
                     }
                     val result = processed.text
+                    audioDiagnostic?.event("PROCESSED_TEXT", org.json.JSONObject().put("final_text", result))
                     val finished = SystemClock.elapsedRealtime()
                     val completed = metrics.get().copy(
                         finalWords = countWords(result),
@@ -479,12 +493,13 @@ class OverlayService : Service() {
                     main.post {
                         diagnostic?.event("result_main_callback", "current=${token == processingToken} phase=$phase")
                         if (token == processingToken && phase == Phase.PROCESSING) {
-                            deliver(result)
+                            deliver(result, InsertMetadata(recordingMs, completed.finalWords, mode, provider, groqModel, completed.targetPackage), raw, audioDiagnostic?.id)
                             UsageStats.get(this).record(completed)
                         }
                     }
                 } catch (e: Exception) {
                     diagnostic?.event("processing_error", "type=${e.javaClass.name} cause=${e.cause?.javaClass?.name}")
+                    audioDiagnostic?.event("PROCESSING_FAILED", org.json.JSONObject().put("error_type", e.javaClass.simpleName))
                     val transcript = raw
                     main.post {
                         if (token != processingToken || phase != Phase.PROCESSING) return@post
@@ -506,26 +521,58 @@ class OverlayService : Service() {
             recorder?.release(); recorder = null
             audioFile = null
             file?.delete()
+            audioDiagnostic?.event("RECORDING_OR_SETUP_FAILED")
+            audioTrace?.event("RECORDING_FAILED"); audioTrace = null
             toast("Aufnahme fehlgeschlagen: ${e.localizedMessage}")
             reset()
         }
     }
 
-    private fun deliver(text: String) {
+    private fun deliver(text: String) = deliver(text, null)
+
+    private fun deliver(text: String, metadata: InsertMetadata?, raw: String? = null, diagnosticId: String? = null) {
         trace?.event("insertion_begin")
         val ready = withTrailingSpace(text)
+        val insertion = InsertDiagnostics.begin(ready.length, metadata)
+        runCatching { insertion?.delayed = DelayedInsertDiagnostics.begin(this, ready, raw, text, diagnosticId) }
+        if (diagnosticId != null) insertion?.audioInsertId = insertion?.delayed?.id ?: java.util.UUID.randomUUID().toString()
+        var clipboard = false
+        var clipboardReason: String? = null
         try {
-            if (!TextInsertService.instance.orFalseInsert(ready)) {
+            if (!TextInsertService.instance.orFalseInsert(ready, insertion)) {
+                clipboardReason = insertion?.clipboardReason()
                 copy(ready)
+                clipboard = true
+                insertion?.step(InsertStep.CLIPBOARD_WRITTEN)
                 toast("Text in Zwischenablage kopiert. Bitte einfügen.")
             }
         } catch (_: Exception) {
+            insertion?.step(InsertStep.DELIVERY_EXCEPTION)
+            clipboardReason = insertion?.clipboardReason()
             copy(ready)
+            clipboard = true
+            insertion?.step(InsertStep.CLIPBOARD_WRITTEN)
             toast("Text in Zwischenablage kopiert. Bitte einfügen.")
-        } finally { reset() }
+        } finally {
+            InsertDiagnostics.finish(this, insertion, clipboard, clipboardReason)
+            runCatching {
+                val delayed = insertion?.delayed
+                AudioSttDiagnostics.link(this, diagnosticId, delayed?.id ?: insertion?.audioInsertId, org.json.JSONObject(insertion?.json(clipboard, clipboardReason) ?: "{}").optString("outcome"))
+                if (clipboard) delayed?.path = "CLIPBOARD"
+                DelayedInsertDiagnostics.finish(this, delayed, org.json.JSONObject(insertion?.json(clipboard, clipboardReason) ?: "{}").optString("outcome"))
+                if (delayed != null && delayed.path != "INPUT_CONNECTION") {
+                    for (delay in listOf(250, 1000, 3000)) DelayedInsertDiagnostics.emit(this, delayed, "DELAYED_READBACK",
+                        org.json.JSONObject().put("scheduled_ms", delay).put("status", "DELAYED_NOT_VERIFIABLE").put("reason", "NO_CONFIRMED_INPUT_CONNECTION_PATH"))
+                }
+            }
+            reset()
+        }
     }
 
-    private fun TextInsertService?.orFalseInsert(text: String): Boolean = this?.insert(text) == true
+    private fun TextInsertService?.orFalseInsert(text: String, diagnostic: InsertAttempt?): Boolean {
+        if (this == null) diagnostic?.step(InsertStep.SERVICE_UNAVAILABLE)
+        return this?.insert(text, diagnostic) == true
+    }
 
     private fun withTrailingSpace(text: String): String =
         if (text.isNotEmpty() && !text.last().isWhitespace()) "$text " else text
@@ -575,6 +622,7 @@ class OverlayService : Service() {
         closeFan()
         processingToken++
         activeProcessor?.cancel(); activeProcessor = null
+        audioTrace?.event("RECORDING_ABORTED_SERVICE_DESTROYED"); audioTrace = null
         recorder?.runCatching { stop() }
         recorder?.release(); recorder = null
         audioFile?.delete(); audioFile = null

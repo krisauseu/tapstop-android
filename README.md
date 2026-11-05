@@ -18,17 +18,24 @@ Ein **480-ms-Long-Press** auf die Blase öffnet im Ruhezustand den Fächer mit d
 | --- | --- | --- |
 | OpenAI | `whisper-1` | `gpt-4o-mini`, Temperatur 0,3 |
 | Groq | `whisper-large-v3` oder `whisper-large-v3-turbo` | `openai/gpt-oss-120b`, Temperatur 0,2 für Plus/Formal und 0,4 für Chat |
+| Google Gemini (manuell wählbar) | `gemini-3.5-transcribe`, wortgetreu mit Sprachhinweis `de-DE` | Separat auswählbarer OpenAI- oder Groq-Rewrite |
 | Lokal – Qualcomm NPU | Whisper Large V3 Turbo FP16, auf dem Gerät | Separat auswählbarer OpenAI- oder Groq-Rewrite |
 
-STT und Textüberarbeitung lassen sich getrennt auswählen, zum Beispiel **Local + Groq-Rewrite**. Ohne eigene Rewrite-Auswahl bleibt bei bestehenden Cloudinstallationen die bisherige Providerpaarung erhalten; Local übernimmt den zuletzt gewählten Cloudprovider. Die vorhandenen Modelle, Temperaturen und Prompts bleiben unverändert.
+STT und Textüberarbeitung lassen sich getrennt auswählen, zum Beispiel **Gemini + Groq-Rewrite**. Ohne eigene Rewrite-Auswahl bleibt bei OpenAI und Groq die bisherige Providerpaarung erhalten. Bei Gemini und Local verwendet die automatische Auswahl den zuletzt für STT gewählten OpenAI- oder Groq-Anbieter. Neue Profile beginnen mit OpenAI.
 
-Die API-Keys werden für OpenAI und Groq getrennt per Android Keystore AES-GCM geschützt und beim Providerwechsel erhalten. **Local benötigt keinen API-Key.** Audio liegt während der Verarbeitung im privaten Cache und wird danach gelöscht. Der STT-Provider wird beim Aufnahmestart festgelegt; Modus und Rewrite-Einstellungen werden am Aufnahmeende übernommen.
+Die API-Keys werden für OpenAI, Groq und Gemini getrennt per Android Keystore AES-GCM geschützt und beim Providerwechsel erhalten. **Local benötigt keinen API-Key.** Audio liegt während der Verarbeitung im privaten Cache und wird danach gelöscht. Der STT-Provider wird beim Aufnahmestart festgelegt; Modus und Rewrite-Einstellungen werden am Aufnahmeende übernommen.
 
-**Local + Roh:** Spracherkennung und Textverarbeitung erfolgen vollständig auf dem Gerät; TapStop sendet weder Audio noch Transkript an einen Cloudprovider. **Local + Plus/Chat/Formal:** Die Spracherkennung bleibt lokal; das Transkript wird anschließend an den konfigurierten Cloudprovider zur Überarbeitung gesendet. Bei OpenAI-/Groq-STT wird die Aufnahme zum gewählten STT-Provider übertragen. Es gibt keinen automatischen Cloud-Fallback.
+**Local + Roh:** Spracherkennung und Textverarbeitung erfolgen vollständig auf dem Gerät; TapStop sendet weder Audio noch Transkript an einen Cloudprovider. **Local + Plus/Chat/Formal:** Die Spracherkennung bleibt lokal; das Transkript wird anschließend an den konfigurierten Cloudprovider zur Überarbeitung gesendet. Bei Cloud-STT wird die Aufnahme zum gewählten STT-Provider übertragen. Es gibt keinen automatischen Cloud-Fallback.
+
+### Google Gemini
+
+Gemini sendet die originale M4A-Datei über die Google Interactions API mit `store=false`. Überschreitet der Base64-kodierte Request inklusive JSON 20 MB, lädt TapStop die Datei über die Files API hoch und versucht, sie nach Abschluss, Fehler oder Abbruch zu löschen. Bei einem Verbindungsverlust kann die Löschung fehlschlagen. Google löscht Dateien nach 48 Stunden automatisch. Gemini akzeptiert Aufnahmen bis zu einer Stunde. Das persönliche Wörterbuch wirkt bei der Textüberarbeitung mit OpenAI oder Groq. [Transkription](https://aistudio.google.com/docs/transcribe), [Files API](https://aistudio.google.com/docs/files)
 
 ### Lokale Spracherkennung
 
 Local unterstützt **maximal 30 Sekunden pro Diktat** und stoppt dann automatisch. Ein weiterer Tap beendet eine kürzere Aufnahme. Diese Grenze gilt ausschließlich für Local. Das etwa 2,2 GB große Modell wird separat importiert und ist nicht in der APK enthalten. Die Qualcomm-Runtime muss im verwendeten APK-Build enthalten sein; der normale Quellcode-Build benötigt keine proprietären SDK-Dateien.
+
+Lokale Diktate über 30 Sekunden per Chunking sind für eine spätere Version vorgesehen.
 
 **Bekannte SDK-Grenze:** Bei bestimmten Aufnahmen nahe 30 Sekunden kann VoiceAI mit `SPECTROGRAM FAIL` scheitern. TapStop zeigt dann einen Fehler, fügt keinen Teiltext ein und startet keinen Cloud-Rewrite. Ein neues, kürzeres Diktat kann ohne erneutes Laden des Modells gestartet werden. Der automatische Stopp ist keine Garantie für eine erfolgreiche Erkennung jeder Aufnahme.
 
@@ -45,7 +52,7 @@ Modellimport, lokale SDK-Builds, Grenzen und Erweiterung auf weitere SoCs: [Qual
 
 ## Nutzung
 
-1. APK als Update installieren und einen STT-Provider auswählen. Für OpenAI/Groq den passenden API-Key speichern; für Local das passende Modellpaket über **Modellordner importieren** auswählen.
+1. APK als Update installieren und einen STT-Provider auswählen. Für OpenAI, Groq oder Gemini den passenden API-Key speichern; für Local das passende Modellpaket über **Modellordner importieren** auswählen.
 2. Bei Groq zwischen Whisper Large V3 und Large V3 Turbo wählen. Bei Local das Modell prüfen/vorbereiten; die erste Initialisierung benötigt zusätzliche Zeit. Für Plus/Chat/Formal einen Cloudprovider für die Textüberarbeitung konfigurieren.
 3. Mikrofon und „Über anderen Apps anzeigen“ erlauben. Für direktes Einfügen **TapStop Texteingabe** unter Bedienungshilfen aktivieren.
 4. Die Overlay-Blase aus der sichtbaren App starten und in einer anderen App ein Textfeld fokussieren.
@@ -55,7 +62,9 @@ Die Android-Plattform beschränkt Mikrofon-Foreground-Services. Nach einem Neust
 
 ## Version und Build
 
-Aktuelle Version: **0.9**, `versionCode=9`: Local Qualcomm NPU als dritter STT-Provider, Modellimport und separate Rewrite-Auswahl.
+**0.10** (`versionCode=10`) ergänzt Gemini 3.5 Transcribe. Die getrennte Auswahl von Spracherkennung und Rewrite erlaubt beispielsweise Gemini für STT und Groq für Plus, Chat oder Formal. Das [persönliche Wörterbuch](docs/PERSONAL_DICTIONARY.md) ergänzt die unterstützten Cloud-Pfade.
+
+Die installierbare APK steht im [GitHub-Release v0.10](https://github.com/krisauseu/tapstop-android/releases/tag/v0.10) bereit.
 
 SDK 36 und JDK 17 sind erforderlich. Für den Build muss `JAVA_HOME` auf JDK 17 zeigen. Mit Android Studio öffnen oder ausführen:
 
@@ -63,11 +72,17 @@ SDK 36 und JDK 17 sind erforderlich. Für den Build muss `JAVA_HOME` auf JDK 17 
 ./gradlew assembleDebug lint testDebugUnitTest packageTapStop
 ```
 
-Die Standardausgabe ist `app/build/outputs/apk/debug/app-debug.apk`; die benannte APK liegt unter **`app/build/outputs/apk/tapstop/TapStop-Android-0.9.apk`**. Sie wird weiterhin mit dem vorhandenen lokalen Debug-Schlüssel signiert. Für Updates auf eine bisherige Installation muss dieselbe Signatur verwendet werden; ein anderer Rechner hat üblicherweise einen anderen Debug-Schlüssel. Signaturschlüssel gehören nicht ins Repository.
+Die Standardausgabe ist `app/build/outputs/apk/debug/app-debug.apk`; die benannte APK liegt unter **`app/build/outputs/apk/tapstop/TapStop-Android-0.10.apk`**. Sie wird weiterhin mit dem vorhandenen lokalen Debug-Schlüssel signiert. Für Updates auf eine bisherige Installation muss dieselbe Signatur verwendet werden; ein anderer Rechner hat üblicherweise einen anderen Debug-Schlüssel. Signaturschlüssel gehören nicht ins Repository.
 
 Ein Build mit lokal bereitgestellter Qualcomm-Runtime verwendet zusätzlich `-PqualcommRuntimeDir=/path/to/local-runtime`. Struktur und Werkzeuge stehen in [tools/qualcomm-whisper](tools/qualcomm-whisper/README.md). Qualcomm-Dateien und Modellgewichte gehören nicht ins öffentliche Repository.
 
 Die JVM-/Robolectric-Tests prüfen weiterhin Gesten, Modus-Fächer, Persistenz, Roh-Verarbeitung ohne Rewrite-Netzwerk sowie Request-Modelle, Temperaturen und exakte Prompttexte beider Cloudprovider. Hinzu kommen Targetzuordnung, Modellprüfung/Import, der lokale Runtime-Lifecycle, Providertrennung und Local-Statistik. Aktuelle und historische Geräteprüfungen stehen in [DEVICE_TESTS.md](DEVICE_TESTS.md) und [INSERT_DEVICE_TESTS.md](INSERT_DEVICE_TESTS.md). Die PoC-Abnahmen ersetzen keine Geräteabnahme der integrierten App.
+
+## Lokale Diagnose
+
+Unter **Einstellungen** lassen sich **Temporäre Insert-Textdiagnose** und **Originalaudio für Diagnose speichern** unabhängig ein- und ausschalten. Die Textdiagnose erfasst Transkript, Ausgabe und Nachkontrollen des eingefügten Texts. Die Audiodiagnose sichert die Originaldatei und die zugehörigen Texte. Bei beiden ausgeschalteten Schaltern schreibt TapStop keine zusätzlichen Audio-, Text- oder Einfügediagnosedateien. Bereits gespeicherte Fälle bleiben erhalten. Die reguläre Nutzungsstatistik läuft weiter.
+
+Die Diagnosefunktionen sind in der veröffentlichten, kompatibel debug-signierten APK verfügbar. Speicherorte und lokale Auswertung sind für [Audio und STT](docs/AUDIO_STT_DIAGNOSTICS.md), [Text und Nachkontrollen](docs/INSERT_DELAYED_DIAGNOSTICS.md) und [Einfügemetadaten](docs/INSERT_DIAGNOSTICS.md) dokumentiert.
 
 ## Update- und Datenkompatibilität
 

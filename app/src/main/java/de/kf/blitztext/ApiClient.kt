@@ -15,7 +15,7 @@ class ApiClient internal constructor(
         else url.openConnection() as HttpURLConnection
     }
 ) {
-    init { require(provider.isCloud) { "Local STT darf keinen Cloud-Client verwenden." } }
+    init { require(provider.supportsRewrite) { "Dieser Client unterstützt OpenAI und Groq." } }
     internal var diagnostic: DictationTrace? = null
     @Volatile private var activeConnection: HttpURLConnection? = null
 
@@ -24,22 +24,35 @@ class ApiClient internal constructor(
 
     fun cancel() { diagnostic?.event("cancel_requested"); activeConnection?.disconnect() }
 
-    fun transcribe(audio: File, apiKey: String): String {
+    fun transcribe(audio: File, apiKey: String, dictionary: String = ""): String {
         diagnostic?.event("stt_begin")
         val boundary = "TapStop-${UUID.randomUUID()}"
         val model = if (provider == Provider.OPENAI) "whisper-1" else groqModel.id
         val modelPart = "--$boundary\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n$model\r\n".toByteArray()
+        val promptPart = PersonalDictionary.sttPrompt(provider, dictionary)?.let {
+            "--$boundary\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\n$it\r\n".toByteArray(Charsets.UTF_8)
+        } ?: byteArrayOf()
         val filePart = "--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n".toByteArray()
         val ending = "\r\n--$boundary--\r\n".toByteArray()
         val connection = connect("$baseUrl/audio/transcriptions", apiKey, "multipart/form-data; boundary=$boundary")
         try {
-            connection.setFixedLengthStreamingMode(modelPart.size.toLong() + filePart.size + audio.length() + ending.size)
+            connection.setFixedLengthStreamingMode(modelPart.size.toLong() + promptPart.size + filePart.size + audio.length() + ending.size)
             diagnostic?.event("stt_http_execute")
             connection.outputStream.use { output ->
                 diagnostic?.event("stt_request_stream_ready")
                 output.write(modelPart)
+                output.write(promptPart)
                 output.write(filePart)
-                audio.inputStream().use { it.copyTo(output) }
+                audio.inputStream().use { input ->
+                    val audioTrace = diagnostic?.audioDiagnostic
+                    if (audioTrace == null || !AudioSttDiagnostics.enabled(audioTrace.context)) input.copyTo(output)
+                    else {
+                        val hash = java.security.MessageDigest.getInstance("SHA-256")
+                        java.security.DigestInputStream(input, hash).copyTo(output)
+                        audioTrace.event("STT_UPLOAD_FILE", JSONObject().put("bytes", audio.length())
+                            .put("sha256", hash.digest().joinToString("") { "%02x".format(it) }))
+                    }
+                }
                 output.write(ending)
             }
             diagnostic?.event("stt_upload_complete")
@@ -51,18 +64,24 @@ class ApiClient internal constructor(
         } finally { connection.disconnect(); if (activeConnection === connection) activeConnection = null; diagnostic?.connectionClosed() }
     }
 
-    fun rewrite(text: String, apiKey: String, mode: Mode = Mode.PLUS): String {
+    fun rewrite(text: String, apiKey: String, mode: Mode = Mode.PLUS, dictionary: String = ""): String {
         if (!mode.usesRewrite) return text
         diagnostic?.event("rewrite_begin")
+        val messages = JSONArray().put(JSONObject().put("role", "system").put("content", promptFor(mode)))
+        val terms = PersonalDictionary.entries(dictionary)
+        if (terms.isNotEmpty()) {
+            messages.put(JSONObject().put("role", "system").put("content", PersonalDictionary.REWRITE_CONTEXT))
+            messages.put(JSONObject().put("role", "user").put("content",
+                JSONObject().put("dictionary", JSONArray(terms)).toString()))
+        }
+        messages.put(JSONObject().put("role", "user").put("content", text))
         val body = JSONObject().apply {
             put("model", if (provider == Provider.OPENAI) "gpt-4o-mini" else "openai/gpt-oss-120b")
             put("temperature", if (provider == Provider.OPENAI) 0.3 else when (mode) {
                 Mode.CHAT -> 0.4
                 else -> 0.2
             })
-            put("messages", JSONArray()
-                .put(JSONObject().put("role", "system").put("content", promptFor(mode)))
-                .put(JSONObject().put("role", "user").put("content", text)))
+            put("messages", messages)
         }
         val connection = connect("$baseUrl/chat/completions", apiKey, "application/json")
         try {

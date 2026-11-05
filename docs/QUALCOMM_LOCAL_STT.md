@@ -103,6 +103,8 @@ Local zeichnet PCM16, Mono, 16 kHz auf. Ein 44-Byte-RIFF/WAV-Header wird beim Ab
 
 Bei 480.000 Samples beziehungsweise 960.000 PCM-Bytes endet die Aufnahme spätestens nach **30 Sekunden**. Ein UI-Autostopp ergänzt die Samplegrenze; ein weiterer Tap kann vorher stoppen. Das vollständige Audio wird genau einmal über `whisper.start(stream)` übergeben. Es gibt kein eigenes Long-Form-Chunking, keine Pause-Schnittsuche und keine Unterdrückung SDK-interner VAD-Segmente.
 
+**Lokale Transkription über 30 Sekunden ist ausdrücklich auf nach v1 verschoben.** Der zusätzliche Chunking-Versuch vom 6. Oktober 2026 wurde ohne bestandene Sprachabnahme beendet; seine Code- und Diagnoseänderungen wurden auf den vorherigen lokalen Stand zurückgesetzt.
+
 VoiceAI darf innerhalb eines Diktats mehrere Encoder-/Decoderläufe ausführen. Ein App-Aufruf bedeutet ausdrücklich nicht einen einzigen internen Graphlauf. Die experimentellen 30–60-Sekunden-PoC-Versuche hatten unzureichende Qualität an Chunkgrenzen und sind für TapStop nicht freigegeben. Cloudaufnahme und Cloudlimits werden durch diese lokale Grenze nicht verkürzt.
 
 ## Modellbestand und Import

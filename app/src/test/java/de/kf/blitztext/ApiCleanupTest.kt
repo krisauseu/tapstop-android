@@ -61,7 +61,7 @@ class ApiCleanupTest {
     @Test fun repeatedSttAndRewriteCloseStreamsAndConnectionsForBothProviders() {
         val audio = File.createTempFile("api-fixture", ".m4a").apply { writeBytes(ByteArray(128)) }
         try {
-            for (provider in Provider.cloudProviders) {
+            for (provider in Provider.rewriteProviders) {
                 val requests = mutableListOf<Connection>()
                 val client = ApiClient(provider, GroqModel.LARGE_V3_TURBO) { Connection(it, "ok").also(requests::add) }
                 repeat(25) {
@@ -78,7 +78,7 @@ class ApiCleanupTest {
     @Test fun httpTimeoutUploadAndParsingFailuresPermitImmediateNextRequest() {
         val audio = File.createTempFile("api-fixture", ".m4a").apply { writeBytes(ByteArray(128)) }
         try {
-            for (provider in Provider.cloudProviders) for (failure in listOf("http", "timeout", "upload", "json")) {
+            for (provider in Provider.rewriteProviders) for (failure in listOf("http", "timeout", "upload", "json")) {
                 val requests = mutableListOf<Connection>()
                 val client = ApiClient(provider, GroqModel.LARGE_V3_TURBO) {
                     Connection(it, if (requests.isEmpty()) failure else "ok").also(requests::add)
@@ -121,7 +121,7 @@ class ApiCleanupTest {
     @Test fun rewriteErrorAfterSuccessfulSttReleasesConnectionAndNextDictationWorks() {
         val audio = File.createTempFile("api-fixture", ".m4a").apply { writeBytes(ByteArray(128)) }
         try {
-            for (provider in Provider.cloudProviders) {
+            for (provider in Provider.rewriteProviders) {
                 val requests = mutableListOf<Connection>()
                 val client = ApiClient(provider, GroqModel.LARGE_V3_TURBO) {
                     Connection(it, if (requests.size == 1) "http" else "ok").also(requests::add)

@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** DEBUG-only metadata. Never pass text, keys, URLs, audio or exception messages here. */
 internal class DictationTrace private constructor(val id: String) {
+    internal var audioDiagnostic: AudioSttTrace? = null
     private val started = SystemClock.elapsedRealtime()
     @Volatile private var workerThread: Thread? = null
     fun workerStarted() { workerThread = Thread.currentThread() }
@@ -28,7 +29,10 @@ internal class DictationTrace private constructor(val id: String) {
             event(name, "workers=${workers.get()} submitted=${submitted.get()} watchdogs=${watchdogs.get()} connections_owned=${connections.get()} threads=$threads fds=${File("/proc/self/fd").list()?.size} heap_bytes=${runtime.totalMemory() - runtime.freeMemory()} native_bytes=${Debug.getNativeHeapAllocatedSize()} rss=$rss dispatcher_running=NA dispatcher_queued=NA pool=NA jobs=NA")
         }.onFailure { event("snapshot_unavailable", "type=${it.javaClass.simpleName}") }
     }
-    fun connectionOpened(implementation: String) { connections.incrementAndGet(); event("connection_created", "implementation=$implementation connect_timeout_ms=10000 read_timeout_ms=60000") }
+    fun connectionOpened(implementation: String, connectMs: Int = 10_000, readMs: Int = 60_000) {
+        connections.incrementAndGet()
+        event("connection_created", "implementation=$implementation connect_timeout_ms=$connectMs read_timeout_ms=$readMs")
+    }
     fun connectionClosed() { connections.decrementAndGet(); event("connection_disconnected") }
     companion object {
         const val TAG = "TapStopDiag"

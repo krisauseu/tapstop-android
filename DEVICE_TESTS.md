@@ -152,3 +152,40 @@ Die separate Test-APK und `scripts/device-tests.py` prüfen außerdem Unicode-Wo
 Der Einfüge-Fix vom vorherigen Arbeitsstand ist unverändert erhalten. In `TextInsertService` kamen nur ein lesender Package-Zugriff und eine API-33-Annotation des bereits vorhandenen Framework-Callbacks hinzu; keine Änderung an Fokus-, Cursor-, InputConnection- oder Fallback-Logik. Die Accessibility-Konfiguration entspricht exakt dem Stand vor Beginn dieses Auftrags.
 
 Grenzen: Kein älteres Android-Gerät/Emulator angeschlossen; Android 10–12 daher nicht erneut praktisch getestet. OpenAI wird durch Aggregationsfixtures abgedeckt, aber in dieser Abnahme nicht mit einem echten Netzwerkdiktat aufgerufen. Fehler-/Timeout-Daten werden mit Fixtures geprüft; die echten Testdiktate waren erfolgreich.
+
+## Gemini-Pilot auf dem HONOR MagicPad · 5. November 2026
+
+Debug-Update per `adb install -r` auf dem YLE-W09 mit bestehender Application-ID und Signatur. Vor der manuellen Gemini-Auswahl waren die Einstellungen und die Statistikdatenbank bytegleich. Die vorhandenen API-Keys blieben entschlüsselbar. Wörterbuch und Statistik blieben erhalten, die Datenbank blieb auf Schema 1. Anschließend wurde Gemini mit einem separat in der App gespeicherten Key getestet.
+
+### Dieselbe Originalaufnahme auf dem Gerät
+
+Die Originaldatei mit 131,030 s wurde anhand ihrer SHA-256-Prüfsumme verifiziert. Je drei Requests liefen aus TapStops produktivem STT-Pfad auf dem HONOR im selben WLAN, mit wechselnder Reihenfolge der Anbieter. Die STT-Zeiten umfassen die Anfrage bis zum geparsten Transkript.
+
+| Modell | Zielsatz korrekt | STT je Lauf (ms) | Median (ms) |
+| --- | ---: | --- | ---: |
+| Gemini 3.5 Transcribe (`verbatim`, `de-DE`) | 3/3 | 5.582, 5.832, 5.214 | 5.582 |
+| OpenAI Whisper-1 | 3/3 | 9.201, 8.186, 7.058 | 8.186 |
+
+Für diesen Clip lag der Gemini-Median rund 32 % unter der gleichzeitig erhobenen OpenAI-Basis. Die frühere Gemini-Evaluation mit 5.047 ms Median lief auf dem Mac. Ihr Vergleichswert von 9.700 ms stammte aus älteren OpenAI-Läufen auf dem HONOR.
+
+### Mikrofon bis zur direkten Texteinfügung
+
+Deutsche Testdiktate wurden über Lautsprecher abgespielt und mit dem HONOR-Mikrofon aufgenommen. Die vier gewerteten Läufe fügten den Text ohne manuelles Einfügen in ein zuvor leer geprüftes Chrome-Feld ein. Die Einfügediagnose bestätigte jeweils `DIRECT_INPUT_CONNECTION_SUCCESS`.
+
+| Modus | Rewrite | Aufnahme (ms) | STT (ms) | Rewrite (ms) | Gesamt ab Stopp (ms) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Roh | – | 5.431 | 2.244 | – | 2.315 |
+| Plus | Groq | 20.215 | 2.575 | 962 | 3.611 |
+| Chat | Groq | 8.515 | 1.913 | 818 | 2.809 |
+| Formal | OpenAI | 10.907 | 2.238 | 3.069 | 5.364 |
+
+Die ersten drei Versuche landeten in der Zwischenablage (`SERVICE_UNAVAILABLE`). Android führte die TapStop-Bedienungshilfe nach der Instrumentierung als aktiviert, aber ungebunden und abgestürzt. Die erneute Verbindung mit derselben Einstellung stellte die direkte Einfügung wieder her. Gewertet wurden die anschließend eindeutig zugeordneten Läufe; die Produktions-Einfügelogik blieb unverändert.
+
+108 JVM-/Robolectric-Tests und 14 Python-Tests bestanden. Android-Lint meldete 0 Fehler und 30 Warnungen. Die Geräte-Instrumentierung bestätigte Statistik, Schlüsselzugriff, native Eingabefelder und Clipboard-Fallback. Alle zwölf Chrome-Einfügefälle bestanden. Groq Whisper Large V3 und Turbo fügten je ein Roh-Diktat direkt ein (1.836 und 1.170 ms STT). Die lokale Qualcomm-Runtime transkribierte denselben 8,450-s-Testclip zweimal im selben Prozess (900 und 925 ms STT). Der Gemini-Files-API-Pfad ist mit simulierten Antworten für Upload, Erfolg, Fehler und Abbruch geprüft. Ein Live-Upload oberhalb des Inline-Limits steht aus. Das persönliche Wörterbuch bleibt für Gemini-STT bis zu einer eigenen Vokabularregression deaktiviert.
+
+## Release 0.10 auf dem Galaxy S24 Ultra · 5. November 2026
+
+- Die finale APK aktualisierte die installierte Version 0.9 per `adb install -r` auf 0.10. Package-ID `de.kf.blitztext` und Debug-Signatur stimmen mit der veröffentlichten 0.9-APK und der zuvor installierten APK überein.
+- `settings.xml` und `usage.db` waren unmittelbar nach dem Update und nach Instrumentierung und App-Start bytegleich. Beide vorhandenen Cloud-Keys blieben entschlüsselbar und das Statistik-Schema blieb auf Version 1.
+- Die Instrumentierung bestätigte Statistik, direkte Texteingabe in native Felder und Clipboard-Fallback. Die für den Test aktivierte Bedienungshilfe wurde anschließend auf ihren vorherigen Zustand zurückgesetzt.
+- Der finale Build mit gepinnter Qualcomm-Runtime, die separate Test-APK, 109 JVM-/Robolectric-Tests und 23 Python-Tests waren erfolgreich. Android-Lint meldete 0 Fehler und 30 Warnungen. Die Opt-out-Tests prüfen Audio, Text und die Einfügemetadaten.

@@ -66,10 +66,12 @@ internal fun QualcommSettings(selected: Boolean, refresh: Int, onSelect: () -> U
     Row(verticalAlignment = Alignment.CenterVertically) {
         RadioButton(selected, onClick = onSelect, enabled = inspection?.compatibility?.selectable == true)
         Column {
-            Text(Provider.QUALCOMM_LOCAL.label)
-            Text("Whisper Large V3 Turbo · vollständig auf dem Gerät", style = MaterialTheme.typography.bodySmall)
+            Text("Lokale Transkription (experimentell)")
+            Text("Whisper Large V3 Turbo · Qualcomm NPU", style = MaterialTheme.typography.bodySmall)
         }
     }
+    Text("Verarbeitet Sprache direkt auf dem Gerät. Geschwindigkeit, Stabilität und Erkennungsqualität hängen stark von der Hardware ab. Nicht für den produktiven Einsatz empfohlen.",
+        style = MaterialTheme.typography.bodySmall)
     Text(inspection?.compatibility?.message ?: "Gerätekompatibilität wird geprüft …",
         style = MaterialTheme.typography.bodySmall)
     if (selected) {

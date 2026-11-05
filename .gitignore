@@ -45,3 +45,33 @@ qualcomm-work/
 diagnostics/
 **/__pycache__/
 *.pyc
+
+# Local recordings, transcripts, device captures and exports.
+*.aac
+*.amr
+*.mp3
+*.ogg
+*.flac
+*.opus
+*.mp4
+*.webm
+*.jsonl
+*.ndjson
+*.log
+*.tar
+*.tar.gz
+*.tgz
+.envrc
+*.pem
+*.p12
+*.pfx
+secrets*.json
+local-tests/
+
+# Private reports from device investigations.
+/HONOR_LATENCY_COMPARISON.md
+/LATENCY_DIAGNOSIS.md
+/docs/INSERT_CASE_ANALYSIS_*.md
+/docs/INSERT_HONOR_ANALYSIS_*.md
+/docs/TRANSCRIPT_ANALYSIS_*.md
+/docs/LOCAL_STT_CHUNKING.md
