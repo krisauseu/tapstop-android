@@ -4,7 +4,6 @@ import argparse
 import hashlib
 import re
 import subprocess
-import tempfile
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -51,8 +50,16 @@ def main():
     require(f"name='de.kf.tapstop' versionCode='{code}' versionName='{args.version}'" in badging, "Unexpected APK version")
     require("sdkVersion:'29'" in badging and "targetSdkVersion:'35'" in badging, "Unexpected SDK versions")
     require("application-debuggable" not in badging, "APK is debuggable")
+    manifest = run("aapt", "dump", "xmltree", apk, "AndroidManifest.xml")
+    require("uses-native-library" not in manifest, "Unexpected native system library declaration")
+    require("launchable-activity: name='de.kf.tapstop.MainActivity'" in badging, "Missing launcher")
+    require("de.kf.tapstop.OverlayService" in manifest and "foregroundServiceType(0x01010599)=(type 0x11)0x80" in manifest,
+            "Missing microphone foreground service")
+    require("de.kf.tapstop.TextInsertService" in manifest and "android.permission.BIND_ACCESSIBILITY_SERVICE" in manifest,
+            "Missing protected accessibility service")
+    require("allowBackup(0x01010280)=(type 0x12)0x0" in manifest, "Backup must be disabled")
 
-    with ZipFile(apk) as archive, tempfile.TemporaryDirectory() as tmp:
+    with ZipFile(apk) as archive:
         names = set(archive.namelist())
         require(len(names) == len(archive.namelist()), "Duplicate APK entries")
         require({n for n in names if n.startswith("assets/")} == ASSETS, "Unexpected asset inventory")
@@ -71,9 +78,6 @@ def main():
             require(not LOCAL_DEX.search(dex), f"Local inference class or reference in {name}")
             require(not re.search(rb"com[./](?:qualcomm|qti)[./]|libQnn|lib[^\x00 ]*Skel\.so", dex, re.I),
                     f"Qualcomm SDK reference in {name}")
-            dex_path = Path(tmp) / name
-            dex_path.write_bytes(dex)
-            run("dexdump", "-f", dex_path)
     print(f"{hashlib.sha256(apk.read_bytes()).hexdigest()}  {apk.name}")
 
 

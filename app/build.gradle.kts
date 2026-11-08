@@ -92,6 +92,9 @@ android {
         }
     }
     qualcommRuntimeDir?.let { runtime ->
+        for (buildType in listOf("debug", "release")) {
+            sourceSets.getByName(buildType).manifest.srcFile("src/qualcomm/AndroidManifest.xml")
+        }
         sourceSets.getByName("main") {
             jniLibs.srcDir(runtime.resolve("jniLibs"))
             assets.srcDir(runtime.resolve("assets"))
