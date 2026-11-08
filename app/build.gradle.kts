@@ -21,6 +21,10 @@ val releaseSigning = providers.environmentVariable("TAPSTOP_SIGNING_PROPERTIES")
     }
 }
 
+check(qualcommRuntimeDir == null || releaseSigning == null) {
+    "The public release signing key cannot be used with the internal Qualcomm runtime"
+}
+
 fun sha256(file: File): String {
     val hash = MessageDigest.getInstance("SHA-256")
     file.inputStream().use { input ->
@@ -57,9 +61,11 @@ android {
             keyPassword = properties.getProperty("keyPassword")
         }
     }
+    dependenciesInfo { includeInApk = false }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = qualcommRuntimeDir == null
+            if (isMinifyEnabled) proguardFiles("cloud-release.pro")
             signingConfig = signingConfigs.findByName("release")
         }
     }
@@ -142,15 +148,15 @@ qualcommRuntimeDir?.let { runtime ->
     tasks.named("preBuild") { dependsOn(verifyRuntime) }
 }
 
-val checkFullRelease = tasks.register("checkFullRelease") {
+val checkPublicRelease = tasks.register("checkPublicRelease") {
     doLast {
-        check(qualcommRuntimeDir != null) { "The full release requires -PqualcommRuntimeDir" }
-        check(releaseSigning != null) { "The full release requires TAPSTOP_SIGNING_PROPERTIES" }
+        check(qualcommRuntimeDir == null) { "The public release excludes the internal Qualcomm runtime" }
+        check(releaseSigning != null) { "The public release requires TAPSTOP_SIGNING_PROPERTIES" }
     }
 }
 
 tasks.register<Copy>("packageTapStop") {
-    dependsOn(checkFullRelease, "assembleRelease")
+    dependsOn(checkPublicRelease, "assembleRelease")
     from(layout.buildDirectory.file("outputs/apk/release/app-release.apk"))
     into(layout.buildDirectory.dir("outputs/apk/tapstop"))
     rename { "TapStop-Android-${android.defaultConfig.versionName}.apk" }

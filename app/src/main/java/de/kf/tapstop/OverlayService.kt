@@ -106,14 +106,18 @@ class OverlayService : Service() {
 
     private fun startRecording() {
         val provider = settings.provider
+        if (!BuildConfig.QUALCOMM_RUNTIME_INCLUDED && provider == Provider.QUALCOMM_LOCAL) {
+            toast("Diese Version benötigt einen Cloud-Anbieter für die Spracherkennung."); return
+        }
         if (provider.isCloud && settings.apiKey(provider).isBlank()) {
             toast("Bitte zuerst den ${provider.label} API-Key speichern."); return
         }
         if (settings.mode.usesRewrite && settings.apiKey(settings.rewriteProvider).isBlank()) {
             toast("Bitte zuerst den ${settings.rewriteProvider.label} API-Key für die Überarbeitung speichern."); return
         }
-        if (provider == Provider.QUALCOMM_LOCAL) {
+        if (BuildConfig.QUALCOMM_RUNTIME_INCLUDED && provider == Provider.QUALCOMM_LOCAL) {
             val runtime = QualcommRuntime.get(this)
+            val stt: SpeechToTextProvider = runtime
             phase = Phase.PREPARING
             render()
             val preparationNotice = if (runtime.status.value.phase != QualcommRuntimePhase.READY)
@@ -122,7 +126,7 @@ class OverlayService : Service() {
             val token = ++processingToken
             worker.execute {
                 try {
-                    runtime.prepare()
+                    stt.prepare()
                     main.post {
                         preparationNotice?.cancel()
                         if (token == processingToken && phase == Phase.PREPARING) beginRecording(provider)

@@ -45,7 +45,10 @@ internal object SpeechToTextProviders {
         Provider.OPENAI, Provider.GROQ -> CloudSpeechToTextProvider(provider, model, key,
             ApiClient(provider, model).also { it.diagnostic = diagnostic }, dictionary)
         Provider.GEMINI -> GeminiSpeechToTextProvider(key, diagnostic)
-        Provider.QUALCOMM_LOCAL -> QualcommRuntime.get(context)
+        Provider.QUALCOMM_LOCAL -> {
+            if (BuildConfig.QUALCOMM_RUNTIME_INCLUDED) QualcommRuntime.get(context)
+            else error("Select a cloud speech recognition provider")
+        }
     }
 }
 

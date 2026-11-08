@@ -27,7 +27,7 @@ interface AudioRecording {
 
     companion object {
         fun create(context: Context, local: Boolean, onLimitReached: () -> Unit): AudioRecording =
-            if (local) PcmAudioRecording(context, onLimitReached) else AacAudioRecording(context)
+            if (BuildConfig.QUALCOMM_RUNTIME_INCLUDED && local) PcmAudioRecording(context, onLimitReached) else AacAudioRecording(context)
     }
 }
 

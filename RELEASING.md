@@ -4,7 +4,7 @@
 
 Use JDK 17, Android SDK Platform 36, Build Tools 35.0.0 for the Gradle build, and Build Tools 36.0.0 for the checks below. Use the checked-in Gradle wrapper and keep the JDK, SDK, and tool versions in the release record. Python 3 runs the offline checks and runtime staging. Use ADB and unlocked USB-debugging devices for acceptance.
 
-The v0.12 release target is `de.kf.tapstop`, version code `12`, version name `0.12`. Keep the application ID, namespace, and component names aligned. Check the intended release commit, a clean Git status, the version fields, and the absence of existing conflicting tags. The published v0.11 baseline points to `00f40d54d78d48b398c5662eeed42be3d108c26c`.
+Both v0.12 and v0.13 use `de.kf.tapstop`. Their version codes are `12` and `13` respectively. Release the v0.12 package transition first, then publish v0.13 as an in-place update signed with the same certificate. Keep the application ID, namespace, and component names aligned. Check the intended release commit, a clean Git status, the version fields, and the absence of existing conflicting tags. The published v0.11 baseline points to `00f40d54d78d48b398c5662eeed42be3d108c26c`.
 
 ## Signing key
 
@@ -23,54 +23,44 @@ keyPassword=<key password>
 
 The certificate is public. The key, properties file, passwords, and backups are private. Keep signing local. The test APK built with `releaseDeviceTests` uses the same certificate to run against the release APK. It is for controlled testing only. Debug builds use Android's debug certificate for development.
 
-## Full GitHub APK
+## Public GitHub APK
 
-Stage the pinned VoiceAI ASR Community 2.7.1.0 and QAIRT 2.50.0.260828 bundle using the [staging instructions](tools/qualcomm-whisper/README.md). Gradle checks the exact file inventory, binary hashes, and hashes of all six notices against the checked-in manifests. For distribution, review the license conditions for the actual SDKs and distributing account. Section 1(iv) of the reviewed AI Stack agreement covers integrated object code subject to the other terms. Keep all original notices and comply with the other agreement conditions, including applicable export restrictions. The [license inventory](docs/QUALCOMM_LICENSING.md) records the SDK and model provenance and the limits on standalone redistribution.
+The default release uses OpenAI, Groq, and Gemini. It excludes the internal SDK, on-device inference and model importer. With no signing environment, `assembleRelease` produces an unsigned Cloud APK. The source CI workflow uses that path. For public distribution, build with the dedicated release key from a clean checkout at the intended commit.
 
 ```sh
 export JAVA_HOME=/absolute/path/to/jdk-17
 export ANDROID_HOME=/absolute/path/to/android-sdk
 export TAPSTOP_SIGNING_PROPERTIES=/absolute/private/path/keystore.properties
-./gradlew --no-daemon -PqualcommRuntimeDir=/absolute/private/path/runtime \
-  -PreleaseDeviceTests=true :app:packageTapStop :app:assembleReleaseAndroidTest \
-  :app:testDebugUnitTest :app:lint
-```
-
-The output to distribute is `app/build/outputs/apk/tapstop/TapStop-Android-0.12.apk`. Use a clean checkout or a clean build for release provenance. Keep inputs, tool versions, and the resulting checksum with the release. Byte-for-byte reproducibility across hosts has yet to be established.
-
-## Free source build
-
-Use a clean checkout without the optional runtime property or signing environment. The resulting unsigned release uses the same app ID and version and includes OpenAI, Groq, and Gemini. The Local option and model importer are hidden. If switching from a same-signer full build with a saved Local choice, select a cloud provider explicitly before starting the bubble.
-
-```sh
-unset TAPSTOP_SIGNING_PROPERTIES
-./gradlew --no-daemon :app:assembleRelease :app:assembleDebugAndroidTest \
-  :app:testDebugUnitTest :app:lintDebug :app:lintRelease
+./gradlew --no-daemon -PreleaseDeviceTests=true :app:packageTapStop \
+  :app:assembleReleaseAndroidTest :app:testDebugUnitTest :app:lintDebug :app:lintRelease
 python3 -m unittest discover -s scripts -p 'test_*.py'
 python3 -m unittest discover -s tools/qualcomm-whisper -p 'test_*.py'
 python3 tools/qualcomm-whisper/test-verify-htp.py
 ```
 
-The APK is `app/build/outputs/apk/release/app-release-unsigned.apk`. The [source CI workflow](.github/workflows/source-build.yml) checks the free build, test APK compilation, JVM tests, lint and Python tests. Its read-only GitHub token suffices. It uses no project secrets and has no artifact upload. Keep proprietary staging and release signing out of that workflow.
+The public packaging task requires the signing configuration. Keep the instrumentation APK local. The Qualcomm tools' Python tests cover the retained internal source. Device acceptance for the public APK uses cloud transcription.
+
+## Internal development build
+
+Stage the pinned SDK bundle using the internal tooling and use `-PqualcommRuntimeDir=/absolute/private/path/runtime :app:assembleDebug` with `TAPSTOP_SIGNING_PROPERTIES` unset. This enables experimental Local STT and model import. Keep the staged runtime, SDK notices, model files, and resulting APKs in the internal development environment. [Internal runtime staging](tools/qualcomm-whisper/README.md)
 
 ## Verify the release artifact
 
+Run from the release checkout and substitute `0.12` or `0.13`.
+
 ```sh
+version=0.13
 bt="$ANDROID_HOME/build-tools/36.0.0"
-cd app/build/outputs/apk/tapstop
-apk=TapStop-Android-0.12.apk
-"$bt/apksigner" verify --verbose --print-certs "$apk"
-"$bt/zipalign" -c -P 16 4 "$apk"
-"$bt/aapt" dump badging "$apk"
-"$bt/aapt" dump xmltree "$apk" AndroidManifest.xml
-unzip -Z1 "$apk"
-shasum -a 256 "$apk" > "$apk.sha256"
-shasum -a 256 -c "$apk.sha256"
+out=app/build/outputs/apk/tapstop
+apk="TapStop-Android-$version.apk"
+commit="$(git rev-parse HEAD)"
+python3 scripts/verify-cloud-apk.py "$out/$apk" "$version" "$commit" "$bt" > "$out/$apk.sha256"
+(cd "$out" && shasum -a 256 -c "$apk.sha256")
+"$bt/aapt" dump xmltree "$out/$apk" AndroidManifest.xml
+./gradlew :app:dependencies --configuration releaseRuntimeClasspath
 ```
 
-Confirm the certificate SHA-256 against the recorded release fingerprint. Confirm `de.kf.tapstop`, version code 12, version name 0.12, minSdk 29, targetSdk 35, a non-debuggable APK, and the expected launcher, microphone foreground service, and accessibility service. The accessibility service must require `android.permission.BIND_ACCESSIBILITY_SERVICE` and point to the service XML. Check that backup remains disabled.
-
-The full APK must have both V75 and V81 stubs and skeletons. Compare decompressed native libraries and notices to the SHA-256 pins in [runtime-files.json](tools/qualcomm-whisper/runtime-files.json) and [runtime-notices.json](tools/qualcomm-whisper/runtime-notices.json). The SDK JAR is compiled to DEX. Check for its SDK classes there. Confirm both project notices in `assets/notices/`. Inspect the archive for model packages, signing material, test fixtures, or other unexpected files. For the free APK, confirm the absence of the SDK classes, native runtime, skeletons, and Qualcomm notices.
+The verifier checks the release certificate, v2 signature, ZIP alignment, application ID, SDK and version fields, source commit, APK contents, and DEX. Review the manifest for the expected launcher, microphone foreground service, accessibility service protected by `android.permission.BIND_ACCESSIBILITY_SERVICE`, and disabled backup. The public release excludes the encrypted Google Play dependency block.
 
 ## Package migration from v0.11
 
@@ -83,7 +73,6 @@ Android installs v0.12 alongside `de.kf.blitztext`. Before installing, identify 
 | Personal dictionary | Copy entries manually from the old settings into the new dictionary editor. |
 | Statistics | Keep the old `usage.db` and its history in the old app. v0.12 starts a new database with schema version 1. |
 | Private configuration and diagnostics | Preserve them in the old installation. Android backup and device-transfer extraction are disabled. |
-| Qualcomm model packages | Reimport a validated original folder for the detected target. Allow disk space for another model copy. TapStop rechecks target and hashes. |
 | Android grants and service | Grant microphone access and enable the new `de.kf.tapstop/de.kf.tapstop.TextInsertService`. The older service entry can coexist. The notification channel ID remains `blitztext` within the new app. |
 
 There is no automatic migration. Keep the older installation and its data until the new version passes device checks and the user explicitly approves removal. Stop an old running bubble from its own settings if it interferes with testing.
@@ -98,15 +87,17 @@ python3 scripts/device-tests.py --serial SERIAL --fresh-install
 
 The fixture uses an isolated temporary database and synthetic editor text. It tests native insertion and the clipboard fallback and temporarily rebinds only the new accessibility service. Use the Chrome checks in [INSERT_DEVICE_TESTS.md](INSERT_DEVICE_TESTS.md) with the updated scripts for broader insertion coverage. ADB tools that read private files via `run-as` require a debug build. Run device smoke tests on the signed artifact itself.
 
-On the Galaxy S24 Ultra (SM8650/V75) and HONOR MagicPad 4 (SM8845/SM8845P/V81), check app launch, provider settings, microphone, accessibility connection, overlay, model import, and statistics. Dictate in Roh with Local and in Plus with a configured rewrite provider. For an HTP acceptance claim, capture the same CDSP domain-3 handle in both encoder and decoder execution for each test session. Use the historical evidence procedure in [DEVICE_TESTS.md](DEVICE_TESTS.md). Lower release log verbosity can limit evidence from the signed APK.
+On an isolated test device, install v0.12 first and then use `adb -s SERIAL install -r` for v0.13. Verify the installed APK hashes and compare settings, decryptable keys, dictionary, and schema 1 statistics after the update. Exercise the legacy Local choice on an isolated test profile. The app should wait for an explicit cloud provider selection and preserve the rest of the profile.
+
+Check the three providers in settings, microphone, overlay, the four modes, insertion and clipboard fallback, and statistics. Use a synthetic recording for live provider checks with existing credentials. Exercise Groq or OpenAI rewriting in Plus, Chat, and Formal and ensure Roh skips rewriting. For v0.13, check English, German, and the system default through Android’s app language settings where supported.
 
 ## GitHub publication
 
-Check that the distributing maintainer can apply Apache 2.0 to the original project code. The Git history attributes all five baseline commits to `krisauseu`. That identifies the recorded author, while ownership of any contributions originating outside Git still requires maintainer confirmation. The LICENSE file contains the canonical Apache text. Its appendix is the Apache license's template, and no owner or year has been guessed. Preserve the separate Blitztext MIT attribution and all third-party terms.
+Publish v0.12 first and confirm its public downloads. Then repeat for v0.13. Each tag points at the exact clean commit recorded in its APK. Keep existing tags and releases intact.
 
-After rights, tests, APK verification, and both device acceptance checks are complete, commit the release sources, build from that exact commit, and tag it with `git tag -a v0.12 -m "TapStop Android 0.12"`. Push the intended commit and tag. Create a draft GitHub Release for `v0.12`, attach the verified APK and `.sha256` file, verify the uploaded checksum, and publish after review. Keep the instrumentation APK, model packages, and standalone SDK files out of the release.
+Create an annotated tag, push the commit and the new tag, and create a draft GitHub Release using the version's release notes. Attach the verified APK and its `.sha256` file. Verify the uploaded asset digest before publishing, then check the public download and checksum. Include the package migration from v0.11, supported cloud providers, and known TalkBack limitation in the release notes. Keep signing files and device-test artifacts out of releases.
 
-Suggested release notes cover the new package and durable release signature, parallel installation and manual data setup, the English and German documentation, the scope of the two validated Qualcomm targets and 30-second limit, and the availability of a separate free source build for future F-Droid work.
+Historical verification reports describe earlier candidates. Use the signed Cloud APKs and their own acceptance evidence for publication.
 
 ## Future F-Droid integration
 
