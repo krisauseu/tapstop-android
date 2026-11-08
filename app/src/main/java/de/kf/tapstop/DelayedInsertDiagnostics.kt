@@ -180,6 +180,7 @@ internal object DelayedInsertDiagnostics {
         emit(context, trace, "MANUAL_ERROR_MARKER", JSONObject().put("association", association)
             .put("associated_insert_id", id ?: JSONObject.NULL).put("age_since_insert_ms", if (id == null) JSONObject.NULL else age))
         val audioNotice = AudioSttDiagnostics.mark(context, id, association, System.currentTimeMillis())
-        return "$audioNotice Marker angefordert: ${id?.take(8) ?: "keine Einfügung"}; Zuordnung: $association. Kein Screenshot erfasst."
+        return context.getString(R.string.marker_insert_requested, audioNotice,
+            id?.take(8) ?: context.getString(R.string.marker_no_insertion), association)
     }
 }

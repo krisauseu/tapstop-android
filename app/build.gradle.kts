@@ -42,8 +42,9 @@ android {
         applicationId = "de.kf.tapstop"
         minSdk = 29
         targetSdk = 35
-        versionCode = 12
-        versionName = "0.12"
+        versionCode = 13
+        versionName = "0.13"
+        resourceConfigurations += listOf("en", "de")
         testInstrumentationRunner = "de.kf.tapstop.StatsInstrumentation"
         buildConfigField("boolean", "QUALCOMM_RUNTIME_INCLUDED", (qualcommRuntimeDir != null).toString())
         buildConfigField("boolean", "LOCAL_DIAGNOSTICS", "true")

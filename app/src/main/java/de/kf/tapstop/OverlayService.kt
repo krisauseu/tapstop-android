@@ -10,6 +10,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.SystemClock
 import android.os.Build
 import android.os.Handler
@@ -49,9 +50,21 @@ class OverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         settings = Settings(this)
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(
-            NotificationChannel("blitztext", "TapStop-Blase", NotificationManager.IMPORTANCE_LOW)
+        val manager = getSystemService(NotificationManager::class.java)
+        updateNotificationChannel(manager)
+    }
+
+    private fun updateNotificationChannel(manager: NotificationManager) {
+        manager.createNotificationChannel(
+            NotificationChannel("blitztext", getString(R.string.bubble_window), NotificationManager.IMPORTANCE_LOW)
         )
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val manager = getSystemService(NotificationManager::class.java)
+        updateNotificationChannel(manager)
+        if (runningService.value == this) manager.notify(1, notification())
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -66,7 +79,7 @@ class OverlayService : Service() {
             runningService.value = this
             TextInsertService.instance?.let { attachBubble(it) }
         } catch (e: Exception) {
-            toast("Blase konnte nicht gestartet werden: ${e.localizedMessage}")
+            toast(getString(R.string.bubble_start_failed))
             stopSelf()
         }
         return START_NOT_STICKY
@@ -76,10 +89,10 @@ class OverlayService : Service() {
         try {
             accessibility.showBubble(this)
         } catch (e: WindowManager.BadTokenException) {
-            toast("Blase konnte nicht gestartet werden. Bitte die Bedienungshilfe prüfen.")
+            toast(getString(R.string.bubble_accessibility_failed))
             stopSelf()
         } catch (e: SecurityException) {
-            toast("Blase konnte nicht gestartet werden. Bitte die Bedienungshilfe prüfen.")
+            toast(getString(R.string.bubble_accessibility_failed))
             stopSelf()
         }
     }
@@ -89,8 +102,8 @@ class OverlayService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, "blitztext")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("TapStop")
-            .setContentText("Mikrofon-Dienst bereit")
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(getString(R.string.microphone_service_ready))
             .setContentIntent(pending)
             .setOngoing(true)
             .build()
@@ -107,17 +120,17 @@ class OverlayService : Service() {
     private fun startRecording() {
         val provider = settings.provider
         if (provider.isCloud && settings.apiKey(provider).isBlank()) {
-            toast("Bitte zuerst den ${provider.label} API-Key speichern."); return
+            toast(getString(R.string.save_provider_key_first, provider.label)); return
         }
         if (settings.mode.usesRewrite && settings.apiKey(settings.rewriteProvider).isBlank()) {
-            toast("Bitte zuerst den ${settings.rewriteProvider.label} API-Key für die Überarbeitung speichern."); return
+            toast(getString(R.string.save_rewrite_key_first, settings.rewriteProvider.label)); return
         }
         if (provider == Provider.QUALCOMM_LOCAL) {
             val runtime = QualcommRuntime.get(this)
             phase = Phase.PREPARING
             render()
             val preparationNotice = if (runtime.status.value.phase != QualcommRuntimePhase.READY)
-                Toast.makeText(this, "Lokales Modell wird vorbereitet …", Toast.LENGTH_LONG).also { it.show() }
+                Toast.makeText(this, getString(R.string.local_preparing), Toast.LENGTH_LONG).also { it.show() }
             else null
             val token = ++processingToken
             worker.execute {
@@ -131,7 +144,7 @@ class OverlayService : Service() {
                     main.post {
                         preparationNotice?.cancel()
                         if (token == processingToken && phase == Phase.PREPARING) {
-                            toast("Lokale Spracherkennung nicht bereit: ${e.localizedMessage}")
+                            toast(e.uiMessage(R.string.local_not_ready).resolve(this))
                             reset()
                         }
                     }
@@ -165,7 +178,7 @@ class OverlayService : Service() {
             phase = Phase.IDLE
             render()
             audioTrace?.event("RECORDING_FAILED"); audioTrace = null
-            toast("Aufnahme fehlgeschlagen: ${e.localizedMessage}")
+            toast(getString(R.string.recording_failed))
         }
     }
 
@@ -197,7 +210,7 @@ class OverlayService : Service() {
                     result.onSuccess { finishRecording(file, ended, it, configuration) }.onFailure {
                         audioFile = null; file?.delete(); recordingProvider = null
                         audioTrace?.event("RECORDING_FAILED"); audioTrace = null
-                        toast("Aufnahme fehlgeschlagen: ${it.localizedMessage}"); reset()
+                        toast(getString(R.string.recording_failed)); reset()
                     }
                 }
             }
@@ -217,7 +230,7 @@ class OverlayService : Service() {
             diagnostic?.event("recording_stopped")
             recorder?.release(); recorder = null
             audioFile = null
-            if (file == null || file.length() == 0L) error("Keine Aufnahme vorhanden.")
+            if (file == null || file.length() == 0L) throw UiFailure(UiMessage(R.string.no_recording))
             runCatching { audioDiagnostic?.finalized(file, recordingMs, configuration.provider, configuration.model) }
             diagnostic?.event("audio_finalized", "audio_ms=$recordingMs audio_bytes=${file.length()}")
             phase = Phase.PROCESSING
@@ -237,7 +250,7 @@ class OverlayService : Service() {
             val rewriteClient = if (mode.usesRewrite) ApiClient(rewriteProvider, groqModel).also { it.diagnostic = diagnostic } else null
             val processor = DictationProcessor(stt,
                 rewrite = { text, selectedMode ->
-                    check(rewriteKey.isNotBlank()) { "${rewriteProvider.label} API-Key für die Überarbeitung fehlt." }
+                    if (rewriteKey.isBlank()) throw UiFailure(UiMessage(R.string.rewrite_key_missing, rewriteProvider.label))
                     requireNotNull(rewriteClient).rewrite(text, rewriteKey, selectedMode, dictionary)
                 }, cancelRewrite = { rewriteClient?.cancel() })
             activeProcessor = processor
@@ -264,8 +277,8 @@ class OverlayService : Service() {
                     val raw = rawTranscript.get()
                     if (raw != null) {
                         copy(withTrailingSpace(raw))
-                        toast("Überarbeitung dauerte zu lange. Rohtranskript wurde kopiert.")
-                    } else toast("Transkription dauerte zu lange. Bitte erneut versuchen.")
+                        toast(getString(R.string.rewrite_timeout))
+                    } else toast(getString(R.string.transcription_timeout))
                     reset()
                 }
             }, if (mode.usesRewrite) 140_000 else 90_000)
@@ -312,8 +325,17 @@ class OverlayService : Service() {
                         UsageStats.get(this).record(metrics.get())
                         if (transcript != null) {
                             copy(withTrailingSpace(transcript))
-                            toast("Überarbeitung fehlgeschlagen; Rohtranskript kopiert: ${e.localizedMessage}")
-                        } else toast("Transkription fehlgeschlagen: ${e.localizedMessage}")
+                            val detail = (e as? UiFailure)?.text?.resolve(this)
+                            toast(if (detail == null) getString(R.string.rewrite_failed_copied)
+                                else getString(R.string.rewrite_failed_detail, detail))
+                        } else {
+                            val fallback = if (provider == Provider.QUALCOMM_LOCAL) R.string.local_transcription_failed
+                                else R.string.transcription_failed
+                            val runtimeStatus = if (provider == Provider.QUALCOMM_LOCAL) QualcommRuntime.get(this).status.value else null
+                            val message = runtimeStatus?.takeIf { it.phase == QualcommRuntimePhase.FAILED }?.message
+                                ?: e.uiMessage(fallback)
+                            toast(message.resolve(this))
+                        }
                         reset()
                     }
                 } finally {
@@ -329,7 +351,7 @@ class OverlayService : Service() {
             file?.delete()
             audioDiagnostic?.event("RECORDING_OR_SETUP_FAILED")
             audioTrace?.event("RECORDING_FAILED"); audioTrace = null
-            toast("Aufnahme fehlgeschlagen: ${e.localizedMessage}")
+            toast(e.uiMessage(R.string.recording_failed).resolve(this))
             reset()
         }
     }
@@ -350,7 +372,7 @@ class OverlayService : Service() {
                 copy(ready)
                 clipboard = true
                 insertion?.step(InsertStep.CLIPBOARD_WRITTEN)
-                toast("Text in Zwischenablage kopiert. Bitte einfügen.")
+                toast(getString(R.string.copied_to_clipboard))
             }
         } catch (_: Exception) {
             insertion?.step(InsertStep.DELIVERY_EXCEPTION)
@@ -358,7 +380,7 @@ class OverlayService : Service() {
             copy(ready)
             clipboard = true
             insertion?.step(InsertStep.CLIPBOARD_WRITTEN)
-            toast("Text in Zwischenablage kopiert. Bitte einfügen.")
+            toast(getString(R.string.copied_to_clipboard))
         } finally {
             InsertDiagnostics.finish(this, insertion, clipboard, clipboardReason)
             runCatching {
@@ -384,7 +406,7 @@ class OverlayService : Service() {
         if (text.isNotEmpty() && !text.last().isWhitespace()) "$text " else text
 
     private fun copy(text: String) {
-        (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("TapStop", text))
+        (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), text))
     }
 
     private fun reset() { activeProcessor = null; phase = Phase.IDLE; render(); trace?.event("processing_complete", "phase=$phase"); trace?.snapshot("idle") }

@@ -1,0 +1,4 @@
+<resources>
+    <!-- Advertise English to Android's locale matcher when it precedes German in the locale list. -->
+    <string name="format_language">en</string>
+</resources>

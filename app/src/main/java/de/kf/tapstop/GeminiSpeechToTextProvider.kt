@@ -37,42 +37,42 @@ internal class GeminiSpeechToTextProvider(
 ) : SpeechToTextProvider {
     private val lock = Any()
     private var activeConnection: HttpURLConnection? = null
-    @Volatile private var stopped: String? = null
+    @Volatile private var stopped: UiFailure? = null
     private val model = Provider.GEMINI.sttModel(GroqModel.LARGE_V3_TURBO)
 
     override fun cancel() {
         diagnostic?.event("cancel_requested")
-        stop("Gemini-Spracherkennung abgebrochen.")
+        stop(R.string.gemini_cancelled, "Gemini-Spracherkennung abgebrochen.")
     }
 
-    private fun stop(message: String) {
+    private fun stop(message: Int, detail: String) {
         val connection = synchronized(lock) {
-            if (stopped == null) stopped = message
+            if (stopped == null) stopped = UiFailure(UiMessage(message), detail = detail)
             activeConnection
         }
         connection?.disconnect()
     }
 
     private fun checkRunning() {
-        stopped?.let { throw IOException(it) }
+        stopped?.let { throw it }
     }
 
     override fun transcribe(audio: File): SttResult {
         checkRunning()
-        if (key.isBlank()) throw IOException("Google Gemini API-Key fehlt.")
+        if (key.isBlank()) throw UiFailure(UiMessage(R.string.gemini_key_missing), detail = "Google Gemini API-Key fehlt.")
         val size = audio.length()
-        if (size == 0L) throw IOException("Die Aufnahme ist leer.")
-        if (size > MAX_FILE_BYTES) throw IOException("Gemini akzeptiert Dateien bis 2 GB.")
+        if (size == 0L) throw UiFailure(UiMessage(R.string.no_recording), detail = "Die Aufnahme ist leer.")
+        if (size > MAX_FILE_BYTES) throw UiFailure(UiMessage(R.string.gemini_file_limit), detail = "Gemini akzeptiert Dateien bis 2 GB.")
         val started = clock()
         diagnostic?.event("stt_begin")
         val duration = try {
             durationMs(audio)
         } catch (_: Exception) {
-            throw IOException("Gemini: Aufnahmedauer konnte nicht gelesen werden.")
+            throw UiFailure(UiMessage(R.string.gemini_duration_unreadable), detail = "Gemini: Aufnahmedauer konnte nicht gelesen werden.")
         }
-        if (duration !in 1..3_600_000L) throw IOException("Gemini unterstützt Aufnahmen bis zu einer Stunde.")
+        if (duration !in 1..3_600_000L) throw UiFailure(UiMessage(R.string.gemini_duration_limit), detail = "Gemini unterstützt Aufnahmen bis zu einer Stunde.")
 
-        val deadline = timeouts.schedule({ stop(TIMEOUT_MESSAGE) }, 180, TimeUnit.SECONDS)
+        val deadline = timeouts.schedule({ stop(R.string.gemini_timeout, TIMEOUT_MESSAGE) }, 180, TimeUnit.SECONDS)
         var fileName: String? = null
         var outcome = "failed"
         try {
@@ -101,10 +101,10 @@ internal class GeminiSpeechToTextProvider(
         } catch (e: Exception) {
             checkRunning()
             throw when (e) {
-                is SocketTimeoutException -> IOException(TIMEOUT_MESSAGE)
-                is JSONException -> IOException("Gemini hat eine ungültige Antwort geliefert.")
+                is SocketTimeoutException -> UiFailure(UiMessage(R.string.gemini_timeout), detail = TIMEOUT_MESSAGE)
+                is JSONException -> UiFailure(UiMessage(R.string.gemini_response_invalid), detail = "Gemini hat eine ungültige Antwort geliefert.")
                 is GeminiResponseException -> e
-                else -> IOException("Netzwerkfehler bei der Gemini-Spracherkennung.")
+                else -> UiFailure(UiMessage(R.string.gemini_network_error), detail = "Netzwerkfehler bei der Gemini-Spracherkennung.")
             }
         } finally {
             deadline.cancel(false)
@@ -136,11 +136,11 @@ internal class GeminiSpeechToTextProvider(
                 "X-Goog-Upload-Header-Content-Length" to size.toString(),
                 "X-Goog-Upload-Header-Content-Type" to MIME
             ), responseHeader = "X-Goog-Upload-URL") { it.write(metadata) }
-        if (location.isBlank()) throw GeminiResponseException("Gemini hat keine Upload-Adresse geliefert.")
+        if (location.isBlank()) throw GeminiResponseException(UiMessage(R.string.gemini_upload_invalid), "Gemini hat keine Upload-Adresse geliefert.")
         val uploadUrl = URL(location)
         if (uploadUrl.protocol != "https" || uploadUrl.host != URL(BASE_URL).host ||
             uploadUrl.userInfo != null || uploadUrl.port !in listOf(-1, 443)) {
-            throw GeminiResponseException("Gemini hat eine ungültige Upload-Adresse geliefert.")
+            throw GeminiResponseException(UiMessage(R.string.gemini_upload_invalid), "Gemini hat eine ungültige Upload-Adresse geliefert.")
         }
 
         val uploaded = request(uploadUrl.file, "stt_file_upload", length = size, contentType = MIME,
@@ -152,9 +152,9 @@ internal class GeminiSpeechToTextProvider(
             Thread.sleep(500)
             file = JSONObject(request("/v1beta/$name", "stt_file_status", method = "GET"))
         }
-        if (file.optString("state") != "ACTIVE") throw GeminiResponseException("Gemini konnte die Audiodatei nicht vorbereiten.")
+        if (file.optString("state") != "ACTIVE") throw GeminiResponseException(UiMessage(R.string.gemini_audio_prepare_failed), "Gemini konnte die Audiodatei nicht vorbereiten.")
         return (file.opt("uri") as? String)?.takeIf { it.isNotBlank() }
-            ?: throw GeminiResponseException("Gemini hat keine Datei-URI geliefert.")
+            ?: throw GeminiResponseException(UiMessage(R.string.gemini_file_uri_missing), "Gemini hat keine Datei-URI geliefert.")
     }
 
     private fun copyAudio(audio: File, output: OutputStream) {
@@ -217,14 +217,19 @@ internal class GeminiSpeechToTextProvider(
             val status = connection.responseCode
             diagnostic?.event("${stage}_headers_received", "http=$status")
             if (cleanup && status == 404) return ""
-            if (status !in 200..299) throw GeminiResponseException(when (status) {
-                400 -> "Gemini hat die Anfrage abgelehnt (HTTP 400). Bitte API-Key und Aufnahme prüfen."
-                401, 403 -> "Google Gemini API-Key ungültig oder für dieses Modell nicht berechtigt."
-                408, 504 -> TIMEOUT_MESSAGE
-                413 -> "Die Audiodatei überschreitet das Gemini-Größenlimit."
-                429 -> "Gemini-Anfragelimit erreicht. Bitte später erneut versuchen."
-                else -> "Gemini-Anfrage fehlgeschlagen (HTTP $status)."
-            })
+            if (status !in 200..299) throw when (status) {
+                400 -> GeminiResponseException(UiMessage(R.string.gemini_request_rejected),
+                    "Gemini hat die Anfrage abgelehnt (HTTP 400). Bitte API-Key und Aufnahme prüfen.")
+                401, 403 -> GeminiResponseException(UiMessage(R.string.provider_key_invalid, Provider.GEMINI.label),
+                    "Google Gemini API-Key ungültig oder für dieses Modell nicht berechtigt.")
+                408, 504 -> GeminiResponseException(UiMessage(R.string.gemini_timeout), TIMEOUT_MESSAGE)
+                413 -> GeminiResponseException(UiMessage(R.string.gemini_audio_too_large),
+                    "Die Audiodatei überschreitet das Gemini-Größenlimit.")
+                429 -> GeminiResponseException(UiMessage(R.string.provider_rate_limit, Provider.GEMINI.label),
+                    "Gemini-Anfragelimit erreicht. Bitte später erneut versuchen.")
+                else -> GeminiResponseException(UiMessage(R.string.provider_http_error, Provider.GEMINI.label, status),
+                    "Gemini-Anfrage fehlgeschlagen (HTTP $status).")
+            }
             if (cleanup) return ""
             val response = if (responseHeader == null) connection.inputStream.bufferedReader().use { it.readText() }
                 else connection.getHeaderField(responseHeader).orEmpty()
@@ -237,7 +242,7 @@ internal class GeminiSpeechToTextProvider(
         }
     }
 
-    private class GeminiResponseException(message: String) : IOException(message)
+    private class GeminiResponseException(text: UiMessage, detail: String) : UiFailure(text, detail = detail)
 
     companion object {
         private const val BASE_URL = "https://generativelanguage.googleapis.com"
@@ -253,7 +258,7 @@ internal class GeminiSpeechToTextProvider(
 
         private fun parseTranscript(result: JSONObject): String {
             if (result.optString("status") != "completed") {
-                throw GeminiResponseException("Gemini hat die Transkription nicht abgeschlossen.")
+                throw GeminiResponseException(UiMessage(R.string.gemini_incomplete), "Gemini hat die Transkription nicht abgeschlossen.")
             }
             val text = buildString {
                 val steps = result.optJSONArray("steps") ?: return@buildString
@@ -268,7 +273,7 @@ internal class GeminiSpeechToTextProvider(
                 }
             }
             return text.takeIf { it.isNotBlank() }
-                ?: throw GeminiResponseException("Gemini hat kein Transkript geliefert.")
+                ?: throw GeminiResponseException(UiMessage(R.string.gemini_no_transcript), "Gemini hat kein Transkript geliefert.")
         }
     }
 }

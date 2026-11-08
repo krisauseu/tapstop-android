@@ -31,7 +31,7 @@ class QualcommTargetsTest {
         val detected = QualcommTargets.detect(hardware("SM8650", "OnePlus", "other"))
         assertEquals(QualcommCompatibilityState.SUPPORTED_SOC_UNVALIDATED_DEVICE, detected.state)
         assertTrue(detected.selectable)
-        assertTrue(detected.message.contains("noch nicht getestet"))
+        assertEquals(R.string.soc_unvalidated, detected.message.resource)
     }
 
     @Test fun deviceMarketingNameDoesNotOverrideSocOrIntroduceUndocumentedAliases() {

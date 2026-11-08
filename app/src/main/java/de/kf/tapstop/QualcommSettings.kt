@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -20,13 +21,13 @@ private data class LocalInspection(
     val hardware: QualcommHardware,
     val compatibility: QualcommCompatibility,
     val model: QualcommModelStatus?,
-    val runtimeError: String?
+    val runtimeError: UiMessage?
 )
 
 /** Large hashes/import and native preparation never run in composition or on the main thread. */
 @Composable
 internal fun QualcommSettings(selected: Boolean, refresh: Int, onSelect: () -> Unit) {
-    val context = LocalContext.current.applicationContext
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val runtime = remember { QualcommRuntime.get(context) }
     val runtimeStatus by runtime.status.collectAsState()
@@ -34,7 +35,7 @@ internal fun QualcommSettings(selected: Boolean, refresh: Int, onSelect: () -> U
     var inspection by remember { mutableStateOf<LocalInspection?>(null) }
     var revision by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
-    var operation by remember { mutableStateOf<String?>(null) }
+    var operation by remember { mutableStateOf<UiMessage?>(null) }
     var details by remember { mutableStateOf(false) }
     LaunchedEffect(refresh, revision) {
         inspection = withContext(Dispatchers.IO) {
@@ -47,17 +48,17 @@ internal fun QualcommSettings(selected: Boolean, refresh: Int, onSelect: () -> U
                     target?.let { QualcommRuntime.availability(context, it) })
             }.getOrElse {
                 LocalInspection(hardware, compatibility, null,
-                    "Lokaler Speicher oder Runtime nicht verfügbar: ${it.localizedMessage}")
+                    it.uiMessage(R.string.local_inspection_failed))
             }
         }
     }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         val target = inspection?.compatibility?.target
         if (uri != null && target != null) scope.launch {
-            busy = true; operation = "Modell wird importiert und geprüft …"
+            busy = true; operation = UiMessage(R.string.model_importing)
             operation = withContext(Dispatchers.IO) {
                 runCatching { QualcommModelStore(context).importDirectory(target, uri).message }
-                    .getOrElse { "Import fehlgeschlagen: ${it.localizedMessage}" }
+                    .getOrElse { it.uiMessage(R.string.import_failed) }
             }
             busy = false; revision++
         }
@@ -66,42 +67,42 @@ internal fun QualcommSettings(selected: Boolean, refresh: Int, onSelect: () -> U
     Row(verticalAlignment = Alignment.CenterVertically) {
         RadioButton(selected, onClick = onSelect, enabled = inspection?.compatibility?.selectable == true)
         Column {
-            Text("Lokale Transkription (experimentell)")
-            Text("Whisper Large V3 Turbo · Qualcomm NPU", style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.local_experimental))
+            Text(stringResource(R.string.local_model_and_backend), style = MaterialTheme.typography.bodySmall)
         }
     }
-    Text("Verarbeitet Sprache direkt auf dem Gerät. Geschwindigkeit, Stabilität und Erkennungsqualität hängen stark von der Hardware ab. Nicht für den produktiven Einsatz empfohlen.",
+    Text(stringResource(R.string.local_experimental_description),
         style = MaterialTheme.typography.bodySmall)
-    Text(inspection?.compatibility?.message ?: "Gerätekompatibilität wird geprüft …",
+    Text(inspection?.compatibility?.message?.resolve(context) ?: stringResource(R.string.checking_compatibility),
         style = MaterialTheme.typography.bodySmall)
     if (selected) {
-        Text("Spracherkennung lokal auf dem Gerät. Maximal 30 Sekunden pro Diktat.",
+        Text(stringResource(R.string.local_duration_limit),
             style = MaterialTheme.typography.bodySmall)
-        inspection?.runtimeError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        model?.let { Text(it.message, style = MaterialTheme.typography.bodySmall) }
-        Text(runtimeStatus.message, style = MaterialTheme.typography.bodySmall)
-        operation?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        inspection?.runtimeError?.let { Text(it.resolve(context), color = MaterialTheme.colorScheme.error) }
+        model?.let { Text(it.message.resolve(context), style = MaterialTheme.typography.bodySmall) }
+        Text(runtimeStatus.message.resolve(context), style = MaterialTheme.typography.bodySmall)
+        operation?.let { Text(it.resolve(context), style = MaterialTheme.typography.bodySmall) }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { importer.launch(null) }, enabled = !busy && inspection?.compatibility?.selectable == true) {
-                Text("Modellordner importieren")
+                Text(stringResource(R.string.import_model_folder))
             }
         }
         OutlinedButton(onClick = {
             scope.launch {
-                busy = true; operation = "Lokales Modell wird vorbereitet …"
+                busy = true; operation = UiMessage(R.string.local_preparing)
                 operation = withContext(Dispatchers.IO) {
-                    runCatching { runtime.prepare(); "Lokales Modell bereit." }
-                        .getOrElse { "Vorbereitung fehlgeschlagen: ${it.localizedMessage}" }
+                    runCatching { runtime.prepare(); UiMessage(R.string.local_ready) }
+                        .getOrElse { it.uiMessage(R.string.prepare_failed) }
                 }
                 busy = false; revision++
             }
         }, enabled = !busy && inspection?.model?.state != QualcommModelState.MISSING &&
             inspection?.compatibility?.selectable == true && inspection?.runtimeError == null) {
-            Text("Modell prüfen und vorbereiten")
+            Text(stringResource(R.string.prepare_model))
         }
     }
-    TextButton(onClick = { details = !details }) { Text(if (details) "Diagnose ausblenden" else "Local-STT-Diagnose") }
+    TextButton(onClick = { details = !details }) { Text(if (details) stringResource(R.string.hide_diagnostics) else stringResource(R.string.local_diagnostics)) }
     if (details) inspection?.let { info ->
         val target = info.compatibility.target
         val state = when {
@@ -111,22 +112,20 @@ internal fun QualcommSettings(selected: Boolean, refresh: Int, onSelect: () -> U
             info.runtimeError != null || runtimeStatus.phase == QualcommRuntimePhase.FAILED -> QualcommCompatibilityState.RUNTIME_UNAVAILABLE
             else -> info.compatibility.state
         }
-        val diagnostic = """
-            Gerät: ${info.hardware.manufacturer} ${info.hardware.model}
-            SoC: ${info.hardware.socModel} (${info.hardware.socManufacturer})
-            ABI: ${info.hardware.abis.joinToString()}
-            Qualcomm Target: ${target?.socModel ?: "–"}
-            HTP: ${target?.let { "V${it.htpVersion}" } ?: "–"}
-            Local STT: $state
-            Modell: Whisper Large V3 Turbo FP16
-            Modellstatus: ${model?.message ?: "Kein Target"}
-            Runtime: ${info.runtimeError ?: runtimeStatus.message}
-            Letzter NPU-Status: unbestätigt (Ausführungsnachweis über native Gerätelogs)
-        """.trimIndent()
+        val dash = stringResource(R.string.dash)
+        val diagnostic = stringResource(
+            R.string.local_diagnostic_details,
+            info.hardware.manufacturer, info.hardware.model, info.hardware.socModel,
+            info.hardware.socManufacturer, info.hardware.abis.joinToString(), target?.socModel ?: dash,
+            target?.let { "V${it.htpVersion}" } ?: dash, state.name,
+            model?.message?.resolve(context) ?: stringResource(R.string.no_target),
+            (info.runtimeError ?: runtimeStatus.message).resolve(context)
+        )
         Text(diagnostic, style = MaterialTheme.typography.bodySmall)
+        val clipLabel = stringResource(R.string.local_diagnostics_clip)
         OutlinedButton(onClick = {
             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                .setPrimaryClip(ClipData.newPlainText("TapStop Local-STT-Diagnose", diagnostic))
-        }) { Text("Diagnose kopieren") }
+                .setPrimaryClip(ClipData.newPlainText(clipLabel, diagnostic))
+        }) { Text(stringResource(R.string.copy_diagnostics)) }
     }
 }

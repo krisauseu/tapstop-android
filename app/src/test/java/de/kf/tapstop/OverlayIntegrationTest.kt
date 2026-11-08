@@ -165,7 +165,7 @@ class OverlayIntegrationTest {
             settings.mode = mode
             shadowOf(Looper.getMainLooper()).idle()
             assertEquals(mode, Settings(service).mode)
-            assertTrue(bubble.contentDescription.toString().startsWith("${mode.label}."))
+            assertTrue(bubble.contentDescription.toString().startsWith("${accessibility.getString(mode.labelRes)}."))
         }
     }
 

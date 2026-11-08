@@ -8,6 +8,7 @@ TapStop ist eine systemweite Spracheingabe für Android. **Tippen → sprechen �
 
 ## 2. Funktionen
 
+- Deutsche und englische Oberfläche mit App-Sprachwahl ab Android 13.
 - Verschiebbares Accessibility-Overlay mit Auswahlfächer für vier Modi.
 - Getrennte Wahl der Anbieter für Sprache zu Text (STT) und Textüberarbeitung.
 - Persönliches Wörterbuch, lokale Nutzungsstatistik sowie getrennt zuschaltbare Audio- und Textdiagnose.
@@ -50,9 +51,9 @@ Halte die Blase im Ruhezustand **480 ms** gedrückt, um den Fächer zu öffnen. 
 
 ## 7. Installation
 
-TapStop benötigt Android 10 oder neuer. Die zuletzt veröffentlichte APK und ihre Release Notes stehen unter [GitHub Releases](https://github.com/krisauseu/tapstop-android/releases). Der vollständige Release-Kandidat für v0.12 heißt `TapStop-Android-0.12.apk`.
+TapStop benötigt Android 10 oder neuer. Die zuletzt veröffentlichte APK und ihre Release Notes stehen unter [GitHub Releases](https://github.com/krisauseu/tapstop-android/releases). Der vollständige Build für v0.13 heißt `TapStop-Android-0.13.apk`.
 
-Version 0.12 verwendet die Application-ID und den Kotlin-Namespace `de.kf.tapstop`, Versionscode `12` und ein eigenes Release-Zertifikat. Android installiert sie parallel zu `de.kf.blitztext` aus v0.11. Behalte die alte Installation während der Prüfung der neuen App. Spätere Updates für `de.kf.tapstop` benötigen eine kompatible Signatur und verwenden denselben Datenbereich. Siehe [Migrationsanleitung](../../RELEASING.md#package-migration-from-v011).
+Version 0.12 führte die Application-ID und den Kotlin-Namespace `de.kf.tapstop` sowie ein eigenes Release-Zertifikat ein. Android installiert sie parallel zu `de.kf.blitztext` aus v0.11. Version 0.13 (Versionscode `13`) aktualisiert 0.12 bei gleicher Signatur direkt und behält dessen App-Daten. Siehe [Migrationsanleitung](../../RELEASING.md#package-migration-from-v011).
 
 Version 0.11 stellte Blase und Fächer auf `TYPE_ACCESSIBILITY_OVERLAY` um. Version 0.10 ergänzte Gemini 3.5 Transcribe und die getrennte Wahl von STT und Überarbeitung.
 
@@ -66,6 +67,12 @@ Version 0.11 stellte Blase und Fächer auf `TYPE_ACCESSIBILITY_OVERLAY` um. Vers
 Das persönliche Wörterbuch nimmt pro Zeile einen Begriff oder Ausdruck auf, bis zu 200 Einträge oder 8 KiB. OpenAI und Groq STT verwenden Einträge vom Listenanfang bis zum Prompt-Limit. Bei Gemini und Local wird das Wörterbuch bei der Cloud-Überarbeitung genutzt. [Persönliches Wörterbuch](../PERSONAL_DICTIONARY.md)
 
 Wähle für v0.12 Anbieter und Modi erneut, gib Keys wieder ein, übertrage Wörterbucheinträge manuell und positioniere die neue Blase. Importiere Modelle erneut aus dem ursprünglichen Modellordner. Alte Statistiken und private Diagnosedateien bleiben im Speicher der alten App.
+
+### Oberflächensprache
+
+TapStop folgt der bevorzugten Sprachreihenfolge von Android und verwendet Englisch, wenn keine der bevorzugten Sprachen unterstützt wird. Regionale Varianten für Deutsch und Englisch werden unterstützt. Ab Android 13 kannst du unter **Einstellungen → Apps → TapStop → Sprache** zwischen Deutsch, Englisch und der Systemeinstellung wählen. Die genaue Menübezeichnung hängt vom Gerät ab.
+
+Die Oberflächensprache ist unabhängig vom Diktat. Du kannst zum Beispiel bei englischer Oberfläche auf Deutsch oder bei deutscher Oberfläche auf Englisch diktieren, soweit der gewählte Anbieter die jeweilige Diktiersprache unterstützt. Gemini behält seinen bisherigen Sprachhinweis `de-DE`.
 
 ## 9. Berechtigungen und Bedienungshilfen
 
@@ -138,6 +145,8 @@ TapStop erkennt den SoC automatisch. Andere Geräte mit passendem Target werden 
 ## 15. Mitarbeit
 
 Gib bei Berichten Build-Variante, Android-Version und Schritte zur Reproduktion an. Halte Keys, Aufnahmen, Transkripte, private Diagnosen, SDK-Binaries und Modelldateien aus Commits und Issues heraus. Füge für neue Qualcomm-Targets Gerätebelege für die Ausführung von Encoder und Decoder bei. Pflege die maßgebliche englische README und diese deutsche Übersetzung gemeinsam.
+
+Lege für eine weitere Sprache eine `values-<locale>/strings.xml` neben den englischen Standardressourcen in `app/src/main/res/values/` an. Übersetze alle übersetzbaren Texte und Pluralformen, behalte die Positionsplatzhalter bei und setze `format_language` auf das Sprachkürzel für die Anzeigeformate. Ergänze die Sprache in `res/xml/locales_config.xml` und in `resourceConfigurations` in `app/build.gradle.kts`. Prüfe Fallback, regionale Varianten, Zahlen, Datum und Pluralformen. Gespeicherte Kennungen und Sprachverarbeitungs-Prompts bleiben von den Oberflächenressourcen getrennt. [Android-App-Sprachwahl](https://developer.android.com/guide/topics/resources/app-languages)
 
 ## 16. Lizenz und Drittanbieterhinweise
 

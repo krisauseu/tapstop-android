@@ -49,7 +49,7 @@ internal class BubbleOverlay(
         params = WindowManager.LayoutParams(size, size, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT).apply {
-            title = "TapStop-Blase"
+            title = context.getString(R.string.bubble_window)
             gravity = Gravity.TOP or Gravity.START
             x = if (settings.bubbleRight) screenWidth - size - margin else margin
             y = settings.bubbleY.takeIf { it >= 0 }?.coerceIn(margin, screenHeight - size - margin)
@@ -67,7 +67,7 @@ internal class BubbleOverlay(
             textSize = 23f
             setTextColor(Color.WHITE)
             elevation = 12 * resources.displayMetrics.density
-            contentDescription = "TapStop: Aufnahme starten"
+            contentDescription = context.getString(R.string.bubble_record_start)
             setOnTouchListener { _, event -> touch(event) }
         }
         render()
@@ -169,7 +169,7 @@ internal class BubbleOverlay(
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
         ).apply {
-            title = "TapStop-Modusfächer"
+            title = context.getString(R.string.mode_picker_window)
             gravity = Gravity.TOP or Gravity.START
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
@@ -189,10 +189,10 @@ internal class BubbleOverlay(
         Mode.entries.forEach { mode ->
             val satellite = TextView(context).apply {
                 gravity = Gravity.CENTER
-                text = context.getString(R.string.mode_satellite, mode.symbol, mode.label)
+                text = context.getString(R.string.mode_satellite, mode.symbol, context.getString(mode.labelRes))
                 textSize = 12f
                 setTextColor(Color.WHITE)
-                contentDescription = "Modus ${mode.label} auswählen"
+                contentDescription = context.getString(R.string.select_mode, context.getString(mode.labelRes))
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
                     setColor(if (mode == settings.mode) Color.rgb(53, 100, 184) else Color.rgb(65, 71, 85))
@@ -214,7 +214,11 @@ internal class BubbleOverlay(
         main.removeCallbacks(longPress)
         gesture.cancel()
         closeFan()
-        if (::bubble.isInitialized) snapToEdge()
+        if (::bubble.isInitialized) {
+            params.title = context.getString(R.string.bubble_window)
+            snapToEdge()
+            render()
+        }
     }
 
     private fun snapToEdge() {
@@ -243,12 +247,14 @@ internal class BubbleOverlay(
         bubble.text = android.text.SpannableString(bubble.text).apply {
             setSpan(android.text.style.RelativeSizeSpan(0.6f), 0, settings.mode.symbol.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        bubble.contentDescription = "${settings.mode.label}. " + when (phase) {
-            Phase.IDLE -> "TapStop: Aufnahme starten"
-            Phase.RECORDING -> "TapStop: Aufnahme läuft, zum Beenden tippen"
-            Phase.PREPARING -> "TapStop: Lokales Modell wird vorbereitet"
-            Phase.PROCESSING -> "TapStop: Text wird verarbeitet"
+        val description = when (phase) {
+            Phase.IDLE -> context.getString(R.string.bubble_record_start)
+            Phase.RECORDING -> context.getString(R.string.bubble_record_stop)
+            Phase.PREPARING -> context.getString(R.string.bubble_preparing)
+            Phase.PROCESSING -> context.getString(R.string.bubble_processing)
         }
+        bubble.contentDescription = context.getString(R.string.bubble_accessibility_status,
+            context.getString(settings.mode.labelRes), description)
     }
 
     fun detach() {

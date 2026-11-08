@@ -8,6 +8,7 @@ TapStop is system-wide Android dictation. **Tap → speak → tap → text.** A 
 
 ## 2. Features
 
+- English and German interface with Android app language settings on Android 13 and later.
 - Movable accessibility overlay with a four-mode picker.
 - Independent speech-to-text (STT) and rewrite provider selection.
 - Personal dictionary, local usage statistics, and independently opt-in audio and text diagnostics.
@@ -32,16 +33,16 @@ Gemini sends the original M4A through the Google Interactions API with `store=fa
 
 ## 5. Local Speech Recognition
 
-The experimental Local provider uses the Qualcomm NPU. Select **Modellordner importieren** in settings and choose the model package for your target. The roughly 2.2 GB package is separate from the APK. The importer verifies the target, runtime versions, sizes, and hashes. Prepare the model before dictation and allow additional time for the first initialization. Local needs no API key.
+The experimental Local provider uses the Qualcomm NPU. Select **Import model folder** in settings and choose the model package for your target. The roughly 2.2 GB package is separate from the APK. The importer verifies the target, runtime versions, sizes, and hashes. Prepare the model before dictation and allow additional time for the first initialization. Local needs no API key.
 
-- **Local + Roh (Raw)** keeps recognition and text processing on the device. TapStop sends neither audio nor transcript to a cloud provider.
+- **Local + Raw** keeps recognition and text processing on the device. TapStop sends neither audio nor transcript to a cloud provider.
 - **Local + Plus, Chat, or Formal** transcribes on device and sends the resulting text to the configured cloud rewrite provider.
 
 Local stops automatically after 30 seconds. Tap again to end a shorter recording. This cap applies only to Local. The source-only build hides the Local provider and its model importer. [Qualcomm backend and model import](docs/QUALCOMM_LOCAL_STT.md) · [Qualcomm license inventory](docs/QUALCOMM_LICENSING.md)
 
 ## 6. Text Processing Modes
 
-- **Roh (Raw)** inserts the STT transcript without a rewrite request.
+- **Raw** inserts the STT transcript without a rewrite request.
 - **Plus** corrects spelling, punctuation, and clear grammar errors and removes pure hesitation sounds. It aims to preserve word choice, sentence order, voice, and meaning.
 - **Chat** turns the dictation into a natural, informal message with occasional appropriate emoji.
 - **Formal** uses a factual style and paragraphs, without emoji.
@@ -50,35 +51,41 @@ Press and hold the idle bubble for **480 ms** to open the picker. Tap a mode to 
 
 ## 7. Installation
 
-TapStop requires Android 10 or later. The latest published APK and its release notes are listed on [GitHub Releases](https://github.com/krisauseu/tapstop-android/releases). The v0.12 full release candidate is named `TapStop-Android-0.12.apk`.
+TapStop requires Android 10 or later. The latest published APK and its release notes are listed on [GitHub Releases](https://github.com/krisauseu/tapstop-android/releases). The full v0.13 build is named `TapStop-Android-0.13.apk`.
 
-Version 0.12 uses application ID and Kotlin namespace `de.kf.tapstop`, version code `12`, and a dedicated release certificate. Android installs it alongside `de.kf.blitztext` from v0.11. Keep the older installation while checking the new one. Later updates for `de.kf.tapstop` require a compatible signing identity and use the same app data area. See the [migration guide](RELEASING.md#package-migration-from-v011).
+Version 0.12 introduced application ID and Kotlin namespace `de.kf.tapstop` and a dedicated release certificate. Android installs it alongside `de.kf.blitztext` from v0.11. Version 0.13 (version code `13`) updates 0.12 in place with the same signing identity and keeps its app data. See the [migration guide](RELEASING.md#package-migration-from-v011).
 
 Version 0.11 moved the bubble and picker to `TYPE_ACCESSIBILITY_OVERLAY`. Version 0.10 added Gemini 3.5 Transcribe and separate STT and rewrite selection.
 
 ## 8. Configuration
 
-1. Select an STT provider in **Einstellungen**. Save the matching API key for OpenAI, Groq, or Gemini. For Local, import and prepare the matching model.
+1. Select an STT provider in **Settings**. Save the matching API key for OpenAI, Groq, or Gemini. For Local, import and prepare the matching model.
 2. Choose a Groq STT model if applicable. For Plus, Chat, or Formal, configure OpenAI or Groq for rewriting.
-3. Grant microphone access and enable **TapStop Texteingabe** in Android accessibility settings.
+3. Grant microphone access and enable **TapStop Text Insertion** (shown as **TapStop Texteingabe** in German) in Android accessibility settings.
 4. Start the bubble from the visible TapStop app. Focus an editor in another app, tap the bubble, speak, and tap again. The bubble turns red while recording and blue while processing.
 
 The personal dictionary accepts one term or expression per line, up to 200 entries or 8 KiB. OpenAI and Groq STT use entries from the beginning of the list up to the prompt limit. With Gemini and Local, the dictionary is used during cloud rewriting. [Personal dictionary](docs/PERSONAL_DICTIONARY.md)
 
 For v0.12, reselect providers and modes, enter keys again, copy dictionary entries manually, and position the new bubble. Reimport models from the original model folder. The old statistics and private diagnostic files remain in the old app's storage.
 
+### Interface language
+
+TapStop follows Android’s preferred language order and uses English when none of the preferred languages is supported. German and English regional variants are supported. On Android 13 and later, use **Settings → Apps → TapStop → Language** to choose English, German, or the system default. The exact menu wording varies by device.
+
+The interface language is independent of dictation. For example, you can dictate in German with the English interface, or in English with the German interface, subject to the selected provider’s capabilities. Gemini retains its existing `de-DE` language hint.
+
 ## 9. Permissions and Accessibility
 
 TapStop uses microphone access, a microphone foreground service, vibration, network access, and notifications on supported Android versions. The accessibility service draws the bubble and mode picker, identifies the focused editor, and inserts text via InputConnection or an accessibility text action. The clipboard fallback covers editors where direct insertion fails. Since v0.11 the bubble uses the accessibility overlay permission path and needs no separate **Display over other apps** grant.
 
-If accessibility disconnects, the bubble and picker disappear. If the microphone service is still running, the bubble returns when accessibility reconnects. Use **Blase beenden** to stop the service even when accessibility is disconnected. After a reboot or after Android stops the microphone service, restart the bubble from the visible app.
+If accessibility disconnects, the bubble and picker disappear. If the microphone service is still running, the bubble returns when accessibility reconnects. Use **Stop bubble** to stop the service even when accessibility is disconnected. After a reboot or after Android stops the microphone service, restart the bubble from the visible app.
 
 ## 10. Privacy and Data Handling
 
 - OpenAI, Groq, and Gemini keys are stored separately using AES-GCM with Android Keystore and are retained when switching providers within one installation. Android isolates the old package's Keystore and private files from v0.12.
 - Cloud STT sends the recording to the selected provider. Cloud rewriting sends the transcript and applicable dictionary context. TapStop has no automatic cloud fallback.
 - Temporary audio lives in private cache and is deleted after processing. TapStop disables Android backup and explicitly excludes app data from cloud backup and device transfer on Android 12 and later.
-- **Temporäre Insert-Textdiagnose** captures transcripts, output, and later checks of inserted text. **Originalaudio für Diagnose speichern** retains input audio and associated text. Both switches are off on a fresh installation. With both off, TapStop writes no additional audio, text, or insertion diagnostics. Turning them off preserves existing files. Usage statistics run independently. These local diagnostics are available in release builds. ADB extraction via `run-as` requires a debuggable build. [Audio and STT](docs/AUDIO_STT_DIAGNOSTICS.md) · [Text and readbacks](docs/INSERT_DELAYED_DIAGNOSTICS.md) · [Insertion metadata](docs/INSERT_DIAGNOSTICS.md)
+- **Temporary insertion text diagnostics** captures transcripts, output, and later checks of inserted text. **Save original audio for diagnostics** retains input audio and associated text. Both switches are off on a fresh installation. With both off, TapStop writes no additional audio, text, or insertion diagnostics. Turning them off preserves existing files. Usage statistics run independently. These local diagnostics are available in release builds. ADB extraction via `run-as` requires a debuggable build. [Audio and STT](docs/AUDIO_STT_DIAGNOSTICS.md) · [Text and readbacks](docs/INSERT_DELAYED_DIAGNOSTICS.md) · [Insertion metadata](docs/INSERT_DIAGNOSTICS.md)
 
 ## 11. Usage Statistics
 
@@ -138,6 +145,8 @@ TapStop detects the SoC automatically. Other devices with a matching target are 
 ## 15. Contributing
 
 Include the build variant, Android version, and reproduction steps in reports. Keep keys, recordings, transcripts, private diagnostics, SDK binaries, and model files out of commits and issues. For new Qualcomm targets, include on-device encoder and decoder execution evidence. Update this English README and its German translation together.
+
+To add a language, add a `values-<locale>/strings.xml` alongside the English defaults in `app/src/main/res/values/`. Translate all translatable strings and plural forms, preserve positional placeholders, and set `format_language` to the language tag used for display formatting. Add the locale to `res/xml/locales_config.xml` and to `resourceConfigurations` in `app/build.gradle.kts`. Test fallback, regional variants, numbers, dates, and plurals. Keep persisted IDs and speech-processing prompts separate from UI resources. [Android app language settings](https://developer.android.com/guide/topics/resources/app-languages)
 
 ## 16. License and Third-Party Notices
 

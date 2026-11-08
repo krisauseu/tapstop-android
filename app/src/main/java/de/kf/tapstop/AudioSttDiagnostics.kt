@@ -191,7 +191,7 @@ internal object AudioSttDiagnostics {
     }
     /** Existing last-insert semantics win. Never silently assign its marker to a newer recording. */
     fun mark(context: Context, insertId: String?, association: String, markerTime: Long): String {
-        if (!enabled(context)) return "Audiodiagnose deaktiviert."
+        if (!enabled(context)) return context.getString(R.string.marker_audio_disabled)
         val prefs = context.getSharedPreferences(PREFS, 0)
         val fallback = if (insertId == null) prefs.getString("last_id", null) else null
         submit {
@@ -207,6 +207,6 @@ internal object AudioSttDiagnostics {
                     .put("screenshot_timestamp_ms", JSONObject.NULL), markerTime)
             }
         }
-        return "Audio-Markierung angefordert; vorhandene Insert-Zuordnung hat Vorrang."
+        return context.getString(R.string.marker_audio_requested)
     }
 }

@@ -45,8 +45,8 @@ fun sttRealtimeFactor(rows: List<DictationStat>): Double? {
     return measured.sumOf { it.recordingMs.toDouble() } / measured.sumOf { it.sttMs!!.toDouble() }
 }
 
-enum class StatsPeriod(val label: String) {
-    TODAY("Heute"), WEEK("Woche"), MONTH("Monat"), ALL("Gesamt");
+enum class StatsPeriod(@param:androidx.annotation.StringRes val labelRes: Int) {
+    TODAY(R.string.today), WEEK(R.string.week), MONTH(R.string.month), ALL(R.string.all_time);
     fun start(today: LocalDate): LocalDate? = when (this) {
         TODAY -> today
         WEEK -> today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))

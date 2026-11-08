@@ -18,6 +18,7 @@ class StatsInstrumentation : Instrumentation() {
     private var accessibilityOnly = false
     private var statisticsOnly = false
     private var verifyPreservedData = false
+    private var localization = false
     private var geminiArguments: Bundle? = null
     private var delayedDiagnostics = false
     private var freshInstall = false
@@ -28,6 +29,7 @@ class StatsInstrumentation : Instrumentation() {
         browserInput = arguments?.getString("browserInput") == "true"
         accessibilityOnly = arguments?.getString("accessibilityOnly") == "true"
         statisticsOnly = arguments?.getString("statisticsOnly") == "true"
+        localization = arguments?.getString("localization") == "true"
         verifyPreservedData = arguments?.getString("verifyPreservedData") == "true"
         delayedDiagnostics = arguments?.getString("delayedDiagnostics") == "true"
         freshInstall = arguments?.getString("freshInstall") == "true"
@@ -37,6 +39,7 @@ class StatsInstrumentation : Instrumentation() {
     override fun onStart() {
         geminiArguments?.let { runGeminiDeviceReplay(it); return }
         if (delayedDiagnostics) { runDelayedDiagnosticChecks(); return }
+        if (localization) { runLocalizationChecks(); return }
         if (verifyPreservedData) { runPreservedDataChecks(); return }
         localArguments?.let { runLocalRuntimeChecks(it); return }
         latencyArguments?.let { runLatencyChecks(it); return }

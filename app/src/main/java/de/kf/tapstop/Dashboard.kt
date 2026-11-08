@@ -1,5 +1,9 @@
 package de.kf.tapstop
 
+import android.content.Context
+import android.content.res.Configuration
+import android.content.res.Resources
+import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -8,19 +12,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
+import java.text.NumberFormat
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 val WarmColors = lightColorScheme(
     primary = Color(0xFF9B4E32), onPrimary = Color.White,
@@ -30,20 +39,62 @@ val WarmColors = lightColorScheme(
     surfaceVariant = Color(0xFFF1E5DC), onSurface = Color(0xFF30251F),
     onSurfaceVariant = Color(0xFF75665D)
 )
-private fun number(value: Long) = String.format(Locale.GERMANY, "%,d", value)
-private fun latency(value: Double?) = value?.let { String.format(Locale.GERMANY, "%.2f s", it / 1000) } ?: "–"
-private fun realtime(rows: List<DictationStat>) = sttRealtimeFactor(rows)?.let { String.format(Locale.GERMANY, "%.1f× Echtzeit", it) } ?: "–× Echtzeit"
-private fun duration(ms: Long): String = if (ms < 60_000) "${ms / 1000} s" else "${ms / 60_000} min ${ms / 1000 % 60} s"
+internal fun Context.statisticsLocale(): Locale {
+    val language = getString(R.string.format_language)
+    val locales = resources.configuration.locales
+    // Android resolves the language resource. Keep its preferred regional variant for formatting.
+    return (0 until locales.size()).firstNotNullOfOrNull { locales[it].takeIf { it.language == language } }
+        ?: Locale.forLanguageTag(language)
+}
+
+internal fun Context.statisticsPlurals(locale: Locale): Resources {
+    // Android's plural rules follow the configured locale even when a string falls back to English.
+    val config = resources.configuration
+    return if (config.locales[0] == locale) resources
+    else createConfigurationContext(Configuration(config).apply { setLocale(locale) }).resources
+}
+
+@Composable
+private fun latency(value: Double?, locale: Locale): String =
+    value?.let { stringResource(R.string.duration_seconds, String.format(locale, "%.2f", it / 1000)) }
+        ?: stringResource(R.string.dash)
+
+@Composable
+private fun realtime(rows: List<DictationStat>, locale: Locale): String {
+    val factor = sttRealtimeFactor(rows)?.let { String.format(locale, "%.1f", it) } ?: stringResource(R.string.dash)
+    return stringResource(R.string.realtime_factor, factor)
+}
+
+@Composable
+private fun duration(ms: Long, format: NumberFormat): String {
+    val seconds = ms / 1000
+    return if (seconds < 60) stringResource(R.string.duration_seconds, format.format(seconds))
+    else stringResource(R.string.duration_minutes_seconds, format.format(seconds / 60), format.format(seconds % 60))
+}
+
+private fun Resources.wordCount(count: Long, format: NumberFormat): String =
+    getQuantityString(R.plurals.word_count, count.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), format.format(count))
+
+@Composable
+private fun dictationsAndWords(rows: List<DictationStat>, format: NumberFormat, plurals: Resources): String =
+    stringResource(R.string.dictations_and_words,
+        plurals.getQuantityString(R.plurals.dictation_count, rows.size, format.format(rows.size)),
+        plurals.wordCount(rows.sumOf { (it.rawWords ?: 0).toLong() }, format))
 
 @Composable
 fun Dashboard(stats: UsageStats, refresh: Int, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val locale = remember(context, configuration) { context.statisticsLocale() }
+    val plurals = remember(context, configuration) { context.statisticsPlurals(locale) }
+    val number = remember(locale) { NumberFormat.getIntegerInstance(locale) }
+    val percentFormat = remember(locale) { NumberFormat.getPercentInstance(locale) }
     var period by remember { mutableStateOf(StatsPeriod.TODAY) }
     var today by remember { mutableStateOf(LocalDate.now()) }
     val revision by stats.revision.collectAsState()
     val storageError by stats.storageError.collectAsState()
     var summary by remember { mutableStateOf<UsageSummary?>(null) }
     var readError by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     var appNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     LaunchedEffect(Unit) { while (true) { today = LocalDate.now(); delay(30_000) } }
     LaunchedEffect(period, revision, refresh, today) {
@@ -59,14 +110,14 @@ fun Dashboard(stats: UsageStats, refresh: Int, modifier: Modifier = Modifier) {
         }.onFailure { readError = true }
     }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Dein TapStop", style = MaterialTheme.typography.headlineLarge)
-        Text("Gesprochen. Erledigt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.dashboard_title), style = MaterialTheme.typography.headlineLarge)
+        Text(stringResource(R.string.dashboard_tagline), color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             StatsPeriod.entries.forEach { item ->
-                FilterChip(selected = period == item, onClick = { period = item }, label = { Text(item.label) })
+                FilterChip(selected = period == item, onClick = { period = item }, label = { Text(stringResource(item.labelRes)) })
             }
         }
-        if (storageError || readError) Text("Statistiken konnten nicht gespeichert oder geladen werden.", color = MaterialTheme.colorScheme.error)
+        if (storageError || readError) Text(stringResource(R.string.stats_load_failed), color = MaterialTheme.colorScheme.error)
         val data = summary
         if (data == null) {
             if (!readError) CircularProgressIndicator()
@@ -74,64 +125,68 @@ fun Dashboard(stats: UsageStats, refresh: Int, modifier: Modifier = Modifier) {
             BoxWithConstraints {
                 if (maxWidth >= 600.dp) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Metric("Wörter", number(data.words), Modifier.weight(1f), true)
-                        Metric("Diktate", number(data.successful.size.toLong()), Modifier.weight(1f))
-                        Metric("Sprechzeit", duration(data.recordingMs), Modifier.weight(1f))
-                        Metric("Ø WPM", String.format(Locale.GERMANY, "%.0f", data.wpm), Modifier.weight(1f))
+                        Metric(stringResource(R.string.metric_words), number.format(data.words), Modifier.weight(1f), true)
+                        Metric(stringResource(R.string.metric_dictations), number.format(data.successful.size.toLong()), Modifier.weight(1f))
+                        Metric(stringResource(R.string.metric_speaking_time), duration(data.recordingMs, number), Modifier.weight(1f))
+                        Metric(stringResource(R.string.metric_wpm), String.format(locale, "%.0f", data.wpm), Modifier.weight(1f))
                     }
                 } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Metric("Wörter", number(data.words), Modifier.weight(1f), true)
-                        Metric("Diktate", number(data.successful.size.toLong()), Modifier.weight(1f))
+                        Metric(stringResource(R.string.metric_words), number.format(data.words), Modifier.weight(1f), true)
+                        Metric(stringResource(R.string.metric_dictations), number.format(data.successful.size.toLong()), Modifier.weight(1f))
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Metric("Sprechzeit", duration(data.recordingMs), Modifier.weight(1f))
-                        Metric("Ø WPM", String.format(Locale.GERMANY, "%.0f", data.wpm), Modifier.weight(1f))
+                        Metric(stringResource(R.string.metric_speaking_time), duration(data.recordingMs, number), Modifier.weight(1f))
+                        Metric(stringResource(R.string.metric_wpm), String.format(locale, "%.0f", data.wpm), Modifier.weight(1f))
                     }
                 }
             }
-            Text("Wörter aus dem Rohtranskript · WPM über die gesamte Aufnahmezeit", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (data.successful.isEmpty()) Text("Dein nächstes Diktat macht den Anfang.", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.raw_and_wpm_explanation), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (data.successful.isEmpty()) Text(stringResource(R.string.first_dictation), style = MaterialTheme.typography.bodyMedium)
             val errors = data.attempts.count { !it.success }
-            if (errors > 0) Text("$errors fehlgeschlagene Verarbeitung(en) · nicht in den Nutzungszahlen enthalten", style = MaterialTheme.typography.bodySmall)
-            Section("Aktivität") { ActivityCalendar(data, period, today) }
-            Section("Provider") {
-                if (data.successful.isEmpty()) Text("Noch keine Nutzung")
+            if (errors > 0) Text(plurals.getQuantityString(R.plurals.processing_errors, errors, number.format(errors)), style = MaterialTheme.typography.bodySmall)
+            Section(stringResource(R.string.activity)) { ActivityCalendar(data, period, today, locale, number, plurals) }
+            Section(stringResource(R.string.providers)) {
+                if (data.successful.isEmpty()) Text(stringResource(R.string.no_usage))
                 data.successful.groupBy { it.provider }.forEach { (provider, rows) ->
                     Text(if (provider == "qualcomm") "Qualcomm NPU" else provider, style = MaterialTheme.typography.titleMedium)
-                    Text("${rows.size} Diktate · ${number(rows.sumOf { (it.rawWords ?: 0).toLong() })} Wörter")
-                    Text("STT-Zeit ${latency(median(rows.mapNotNull { it.sttMs }))} · ${realtime(rows)}", color = MaterialTheme.colorScheme.primary)
+                    Text(dictationsAndWords(rows, number, plurals))
+                    Text(stringResource(R.string.stt_time_and_speed, latency(median(rows.mapNotNull { it.sttMs }), locale), realtime(rows, locale)), color = MaterialTheme.colorScheme.primary)
                     rows.groupBy { it.model }.forEach { (model, modelRows) ->
                         Text(if (provider == "qualcomm") "Qualcomm NPU · Whisper Large V3 Turbo" else "$provider · $model", style = MaterialTheme.typography.titleSmall)
-                        Text("${modelRows.size} Diktate · ${number(modelRows.sumOf { (it.rawWords ?: 0).toLong() })} Wörter", style = MaterialTheme.typography.bodySmall)
-                        Text("STT-Zeit ${latency(median(modelRows.mapNotNull { it.sttMs }))} · ${realtime(modelRows)}", style = MaterialTheme.typography.bodySmall)
+                        Text(dictationsAndWords(modelRows, number, plurals), style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.stt_time_and_speed, latency(median(modelRows.mapNotNull { it.sttMs }), locale), realtime(modelRows, locale)), style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                Text("STT-Zeit: Median. × Echtzeit: gesamte Aufnahmezeit / gesamte STT-Zeit. Nur erfolgreiche Diktate mit messbaren Zeiten.", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.stt_stats_explanation), style = MaterialTheme.typography.bodySmall)
             }
-            Section("Verarbeitungszeit") {
-                StatLine("STT-Zeit · Median", latency(median(data.successful.mapNotNull { it.sttMs })))
-                StatLine("Gesamt · Median", latency(median(data.successful.mapNotNull { it.totalMs })))
-                StatLine("Rewrite · Median", latency(median(data.successful.mapNotNull { it.rewriteMs })))
-                Text("Gesamt: Aufnahmeende bis fertiger Text. Nur erfolgreich verarbeitete Diktate.", style = MaterialTheme.typography.bodySmall)
+            Section(stringResource(R.string.processing_time)) {
+                StatLine(stringResource(R.string.stt_median), latency(median(data.successful.mapNotNull { it.sttMs }), locale))
+                StatLine(stringResource(R.string.total_median), latency(median(data.successful.mapNotNull { it.totalMs }), locale))
+                StatLine(stringResource(R.string.rewrite_median), latency(median(data.successful.mapNotNull { it.rewriteMs }), locale))
+                Text(stringResource(R.string.total_latency_explanation), style = MaterialTheme.typography.bodySmall)
             }
-            Section("Apps") {
+            Section(stringResource(R.string.apps)) {
                 val apps = data.successful.groupBy { it.targetPackage }.entries.sortedByDescending { (_, rows) -> rows.sumOf { (it.rawWords ?: 0).toLong() } }.take(5)
-                if (apps.isEmpty()) Text("Noch keine Ziel-Apps")
-                apps.forEach { (pkg, rows) -> StatLine(pkg?.let { appNames[it] ?: it } ?: "Unbekannt", "${number(rows.sumOf { (it.rawWords ?: 0).toLong() })} Wörter") }
+                if (apps.isEmpty()) Text(stringResource(R.string.no_target_apps))
+                apps.forEach { (pkg, rows) -> StatLine(pkg?.let { appNames[it] ?: it } ?: stringResource(R.string.unknown_app), plurals.wordCount(rows.sumOf { (it.rawWords ?: 0).toLong() }, number)) }
             }
-            Section("Modi") {
+            Section(stringResource(R.string.modes)) {
                 val total = data.successful.size
                 Mode.entries.forEach { mode ->
                     val rows = data.successful.filter { it.mode == mode.name }
                     val percent = if (total > 0) (rows.size * 100.0 / total).roundToInt() else 0
-                    StatLine(mode.label, "${rows.size} · $percent %")
-                    StatLine("${mode.label} · Roh → final", "${number(rows.sumOf { (it.rawWords ?: 0).toLong() })} → ${number(rows.sumOf { (it.finalWords ?: 0).toLong() })}")
+                    val label = stringResource(mode.labelRes)
+                    val share = percentFormat.format(percent / 100.0)
+                    StatLine(label, stringResource(R.string.count_and_share, number.format(rows.size), share))
+                    StatLine(stringResource(R.string.mode_raw_to_final, label), stringResource(R.string.counts_raw_to_final,
+                        number.format(rows.sumOf { (it.rawWords ?: 0).toLong() }),
+                        number.format(rows.sumOf { (it.finalWords ?: 0).toLong() })))
                 }
-                StatLine("Rohwörter → finale Wörter", "${number(data.words)} → ${number(data.finalWords)}")
-                Text("Final = zur Einfügung oder Zwischenablage bereitgestellter Text.", style = MaterialTheme.typography.bodySmall)
+                StatLine(stringResource(R.string.raw_to_final), stringResource(R.string.counts_raw_to_final, number.format(data.words), number.format(data.finalWords)))
+                Text(stringResource(R.string.final_words_explanation), style = MaterialTheme.typography.bodySmall)
             }
-            Text("Nur auf diesem Gerät. Keine Texte, Audiodateien oder Cloud-Statistiken.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.dashboard_privacy), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -162,27 +217,32 @@ private fun StatLine(label: String, value: String) {
     }
 }
 @Composable
-private fun ActivityCalendar(data: UsageSummary, period: StatsPeriod, today: LocalDate) {
+private fun ActivityCalendar(
+    data: UsageSummary, period: StatsPeriod, today: LocalDate, locale: Locale,
+    number: NumberFormat, plurals: Resources
+) {
     val colors = listOf(MaterialTheme.colorScheme.surfaceVariant, Color(0xFFF1C4A7), Color(0xFFD68F65), Color(0xFF9B4E32))
     fun level(words: Long) = when { words == 0L -> 0; words < 100 -> 1; words < 500 -> 2; else -> 3 }
+    val dateFormat = remember(locale) { DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "EEEEMMMMd"), locale) }
     @Composable fun cell(day: LocalDate?, modifier: Modifier, showDay: Boolean) {
         val words = day?.let { data.days[it] } ?: 0L
+        val description = day?.let { stringResource(R.string.calendar_day_description, it.format(dateFormat), plurals.wordCount(words, number)) }
         Box(modifier.clip(RoundedCornerShape(4.dp)).background(if (day == null || day > today) Color.Transparent else colors[level(words)])
-            .semantics { contentDescription = day?.let { "$it: $words Wörter" } ?: "" }, contentAlignment = Alignment.Center) {
-            if (showDay && day != null) Text(day.dayOfMonth.toString(), style = MaterialTheme.typography.labelSmall,
+            .semantics { if (description != null) contentDescription = description }, contentAlignment = Alignment.Center) {
+            if (showDay && day != null) Text(number.format(day.dayOfMonth), style = MaterialTheme.typography.labelSmall,
                 color = if (words >= 500 && day <= today) Color.White else MaterialTheme.colorScheme.onSurface)
         }
     }
     if (period == StatsPeriod.TODAY) {
-        Text(today.format(DateTimeFormatter.ofPattern("EEEE, d. MMMM", Locale.GERMAN)), style = MaterialTheme.typography.bodySmall)
+        Text(today.format(dateFormat), style = MaterialTheme.typography.bodySmall)
         cell(today, Modifier.size(36.dp), true)
     } else if (period != StatsPeriod.ALL) {
         val first = if (period == StatsPeriod.MONTH) today.withDayOfMonth(1) else StatsPeriod.WEEK.start(today)!!
         val days = if (period == StatsPeriod.MONTH) first.lengthOfMonth() else 7
         val offset = first.dayOfWeek.value - 1
-        Text(if (period == StatsPeriod.MONTH) today.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.GERMAN)) else "Diese Woche", style = MaterialTheme.typography.bodySmall)
+        Text(if (period == StatsPeriod.MONTH) today.format(DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "yMMMM"), locale)) else stringResource(R.string.this_week), style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            listOf("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So").forEach { Text(it, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall) }
+            DayOfWeek.entries.forEach { Text(it.getDisplayName(TextStyle.SHORT, locale), Modifier.weight(1f), style = MaterialTheme.typography.labelSmall) }
         }
         for (week in 0 until (offset + days + 6) / 7) {
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -194,7 +254,7 @@ private fun ActivityCalendar(data: UsageSummary, period: StatsPeriod, today: Loc
         }
     } else {
         // Totals cover all history; this compact heatmap deliberately shows the latest year.
-        Text("Letzte 53 Wochen · links älter, rechts heute", style = MaterialTheme.typography.bodySmall)
+        Text(stringResource(R.string.calendar_all_time), style = MaterialTheme.typography.bodySmall)
         val first = StatsPeriod.WEEK.start(today)!!.minusWeeks(52)
         val scroll = rememberScrollState()
         LaunchedEffect(Unit) { scroll.scrollTo(scroll.maxValue) }
@@ -206,6 +266,6 @@ private fun ActivityCalendar(data: UsageSummary, period: StatsPeriod, today: Loc
     }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         colors.forEach { Box(Modifier.size(12.dp).background(it, RoundedCornerShape(3.dp))) }
-        Text("0 · 1–99 · 100–499 · 500+ Wörter", style = MaterialTheme.typography.labelSmall)
+        Text(stringResource(R.string.calendar_legend), style = MaterialTheme.typography.labelSmall)
     }
 }

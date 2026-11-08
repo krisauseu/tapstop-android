@@ -13,12 +13,12 @@ import java.lang.reflect.Proxy
 import java.security.MessageDigest
 
 enum class QualcommRuntimePhase { NOT_INITIALIZED, PREPARING, READY, TRANSCRIBING, FAILED }
-data class QualcommRuntimeStatus(val phase: QualcommRuntimePhase, val message: String)
+data class QualcommRuntimeStatus(val phase: QualcommRuntimePhase, val message: UiMessage)
 
 /** Application-scoped model ownership. Activities, overlays and provider changes never unload it. */
 class QualcommRuntime private constructor(private val context: Context) : SpeechToTextProvider {
     private val session = QualcommSession()
-    private val changes = MutableStateFlow(QualcommRuntimeStatus(QualcommRuntimePhase.NOT_INITIALIZED, "Lokale Runtime noch nicht geladen."))
+    private val changes = MutableStateFlow(QualcommRuntimeStatus(QualcommRuntimePhase.NOT_INITIALIZED, UiMessage(R.string.runtime_not_loaded)))
     val status = changes.asStateFlow()
     private val modelChanges = MutableStateFlow<QualcommModelStatus?>(null)
     val modelStatus = modelChanges.asStateFlow()
@@ -29,28 +29,28 @@ class QualcommRuntime private constructor(private val context: Context) : Speech
     @Synchronized override fun prepare() {
         if (session.ready) {
             verifyResidentModel()
-            changes.value = QualcommRuntimeStatus(QualcommRuntimePhase.READY, "Lokales Modell bereit.")
+            changes.value = QualcommRuntimeStatus(QualcommRuntimePhase.READY, UiMessage(R.string.local_ready))
             return
         }
-        session.terminalFailure?.let { throw IOException(QualcommSession.RESTART_MESSAGE, it) }
+        session.terminalFailure?.let { throw UiFailure(UiMessage(R.string.local_restart), it) }
         if (session.initializationAttempted) {
             // A previous UI owner was cancelled while native init was still running.
             // Queue behind it; never replace its model identity or launch a second init.
-            session.prepare { throw IOException(QualcommSession.RESTART_MESSAGE) }
+            session.prepare { throw UiFailure(UiMessage(R.string.local_restart)) }
             verifyResidentModel()
-            changes.value = QualcommRuntimeStatus(QualcommRuntimePhase.READY, "Lokales Modell bereit.")
+            changes.value = QualcommRuntimeStatus(QualcommRuntimePhase.READY, UiMessage(R.string.local_ready))
             return
         }
-        changes.value = QualcommRuntimeStatus(QualcommRuntimePhase.PREPARING, "Lokales Modell wird geprüft und geladen …")
+        changes.value = QualcommRuntimeStatus(QualcommRuntimePhase.PREPARING, UiMessage(R.string.runtime_loading))
         try {
             val compatibility = QualcommTargets.detect(AndroidQualcommHardware.read())
-            check(compatibility.selectable) { compatibility.message }
+            if (!compatibility.selectable) throw UiFailure(compatibility.message)
             val selected = requireNotNull(compatibility.target)
-            availability(context, selected)?.let { throw IOException(it) }
+            availability(context, selected)?.let { throw UiFailure(it) }
             // Missing/invalid models are recoverable without spending the one native init attempt.
             val checkedModel = QualcommModelStore(context).inspect(selected, verifyHashes = true)
             modelChanges.value = checkedModel
-            check(checkedModel.ready && checkedModel.hashesVerified) { checkedModel.message }
+            if (!checkedModel.ready || !checkedModel.hashesVerified) throw UiFailure(checkedModel.message)
             val models = checkedModel.directory
             verifyLibraries(context, selected)
             val skeletonDirectory = prepareSkeleton(context, selected)
@@ -71,13 +71,13 @@ class QualcommRuntime private constructor(private val context: Context) : Speech
                     if (BuildConfig.DEBUG) Log.i(TAG, "runtime_ready target=${selected.id} htp=${selected.htpVersion} soc_model=${selected.socModel}")
                 }
             }
-            changes.value = QualcommRuntimeStatus(QualcommRuntimePhase.READY, "Whisper Large V3 Turbo bereit.")
+            changes.value = QualcommRuntimeStatus(QualcommRuntimePhase.READY, UiMessage(R.string.runtime_ready))
         } catch (e: Throwable) {
             changes.value = QualcommRuntimeStatus(
                 if (session.initializationAttempted) QualcommRuntimePhase.FAILED else QualcommRuntimePhase.NOT_INITIALIZED,
-                e.message ?: "Lokale Spracherkennung nicht verfügbar.")
+                if (session.terminalFailure != null) UiMessage(R.string.local_restart) else e.uiMessage(R.string.runtime_failed))
             if (e is Exception) throw e
-            throw IOException("Qualcomm-Runtime konnte nicht geladen werden.", e)
+            throw UiFailure(UiMessage(R.string.runtime_failed), e)
         }
     }
 
@@ -85,7 +85,7 @@ class QualcommRuntime private constructor(private val context: Context) : Speech
         prepare()
         PcmWav.validate(audio)
         verifyResidentModel()
-        changes.value = QualcommRuntimeStatus(QualcommRuntimePhase.TRANSCRIBING, "Spracherkennung lokal auf dem Gerät …")
+        changes.value = QualcommRuntimeStatus(QualcommRuntimePhase.TRANSCRIBING, UiMessage(R.string.runtime_transcribing))
         try {
             val selected = requireNotNull(target)
             if (BuildConfig.DEBUG) Log.i(TAG, "session_start target=${selected.id} audio_ms=${PcmWav.validate(audio)}")
@@ -97,8 +97,8 @@ class QualcommRuntime private constructor(private val context: Context) : Speech
             throw e
         } finally {
             changes.value = if (session.terminalFailure != null)
-                QualcommRuntimeStatus(QualcommRuntimePhase.FAILED, QualcommSession.RESTART_MESSAGE)
-            else QualcommRuntimeStatus(QualcommRuntimePhase.READY, "Lokales Modell bereit.")
+                QualcommRuntimeStatus(QualcommRuntimePhase.FAILED, UiMessage(R.string.local_restart))
+            else QualcommRuntimeStatus(QualcommRuntimePhase.READY, UiMessage(R.string.local_ready))
         }
     }
 
@@ -109,10 +109,10 @@ class QualcommRuntime private constructor(private val context: Context) : Speech
         val directory = requireNotNull(modelDirectory)
         try {
             if (fingerprint(directory, selected) != modelFingerprint)
-                throw IOException("Geladene Modelldateien wurden verändert. Modell neu prüfen und TapStop vollständig neu starten.")
+                throw UiFailure(UiMessage(R.string.resident_model_changed))
         } catch (e: Exception) {
             modelChanges.value = QualcommModelStatus(QualcommModelState.INVALID,
-                e.message ?: "Geladenes Modell ist ungültig.", directory)
+                e.uiMessage(R.string.model_invalid), directory)
             throw e
         }
     }
@@ -125,42 +125,42 @@ class QualcommRuntime private constructor(private val context: Context) : Speech
         }
 
         /** A read-only packaging check, not an NPU execution claim. Does not initialize native code. */
-        fun availability(context: Context, target: QualcommTarget): String? {
+        fun availability(context: Context, target: QualcommTarget): UiMessage? {
             if (runCatching { Class.forName(VOICE_AI_CLASS, false, context.classLoader) }.isFailure)
-                return "Diese APK enthält keine Qualcomm-Runtime. Ein Build mit lokal bereitgestelltem SDK ist erforderlich."
+                return UiMessage(R.string.runtime_sdk_missing)
             val nativeDirectory = File(context.applicationInfo.nativeLibraryDir)
             val missing = requiredLibraries(target).keys.firstOrNull { !File(nativeDirectory, it).isFile }
-            if (missing != null) return "Qualcomm-Runtime unvollständig: $missing fehlt."
+            if (missing != null) return UiMessage(R.string.runtime_library_missing, missing)
             if (runCatching { context.assets.open("qualcomm/${target.skeletonName}").use { } }.isFailure)
-                return "Qualcomm-Runtime für dieses Target fehlt (${target.skeletonName})."
+                return UiMessage(R.string.runtime_skeleton_missing, target.skeletonName)
             return null
         }
 
         private fun fingerprint(directory: File, target: QualcommTarget) = target.modelFiles.map {
             val file = File(directory, it.name)
-            if (!file.isFile || file.length() != it.sizeBytes) throw IOException("Modelldatei fehlt oder hat eine falsche Größe: ${it.name}")
+            if (!file.isFile || file.length() != it.sizeBytes) throw UiFailure(UiMessage(R.string.model_file_size_invalid, it.name))
             file.length() to file.lastModified()
         }
 
         private fun verifyLibraries(context: Context, target: QualcommTarget) {
             for ((name, hash) in requiredLibraries(target)) {
                 val file = File(context.applicationInfo.nativeLibraryDir, name)
-                if (sha256(file) != hash) throw IOException("Inkompatible Qualcomm-Runtime: $name (SHA-256).")
+                if (sha256(file) != hash) throw UiFailure(UiMessage(R.string.runtime_library_hash, name))
             }
         }
 
         private fun prepareSkeleton(context: Context, target: QualcommTarget): File {
             val directory = File(context.getExternalFilesDir(null) ?: context.filesDir,
                 "qualcomm-runtime/${target.qairtVersion}/v${target.htpVersion}")
-            check(directory.isDirectory || directory.mkdirs()) { "Lokaler Runtime-Ordner nicht verfügbar." }
+            checkUi(directory.isDirectory || directory.mkdirs(), R.string.runtime_folder_unavailable)
             val output = File(directory, target.skeletonName)
-            val expected = skeletonHashes[target.htpVersion] ?: throw IOException("Kein validierter Skeleton für dieses Target.")
+            val expected = skeletonHashes[target.htpVersion] ?: throw UiFailure(UiMessage(R.string.runtime_skeleton_unsupported))
             if (!output.isFile || sha256(output) != expected) {
                 val pending = File(directory, "${target.skeletonName}.pending")
                 try {
                     context.assets.open("qualcomm/${target.skeletonName}").use { input -> pending.outputStream().use { input.copyTo(it) } }
-                    check(sha256(pending) == expected) { "Qualcomm-Skeleton hat einen falschen SHA-256." }
-                    check(pending.renameTo(output)) { "Qualcomm-Skeleton konnte nicht installiert werden." }
+                    checkUi(sha256(pending) == expected, R.string.runtime_skeleton_hash)
+                    checkUi(pending.renameTo(output), R.string.runtime_skeleton_install)
                 } finally { pending.delete() }
             }
             return directory

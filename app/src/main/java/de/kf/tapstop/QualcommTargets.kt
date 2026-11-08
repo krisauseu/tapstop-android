@@ -45,7 +45,7 @@ data class QualcommHardware(
 data class QualcommCompatibility(
     val state: QualcommCompatibilityState,
     val target: QualcommTarget?,
-    val message: String
+    val message: UiMessage
 ) {
     val hardwareSupported get() = target != null && state != QualcommCompatibilityState.UNSUPPORTED
     val selectable get() = state == QualcommCompatibilityState.SUPPORTED_VALIDATED ||
@@ -82,15 +82,15 @@ object QualcommTargets {
         val soc = hardware.socModel.trim().uppercase(Locale.ROOT)
         val target = all.singleOrNull { soc in it.socAliases }
             ?: return QualcommCompatibility(QualcommCompatibilityState.UNSUPPORTED, null,
-                "Für diesen SoC fehlt ein passendes Qualcomm-Modellpaket. Die vorhandenen Modelle sind SoC-spezifisch.")
+                UiMessage(R.string.soc_unsupported))
         val vendor = hardware.socManufacturer.trim().uppercase(Locale.ROOT)
         if (vendor != "QTI" && vendor != "QUALCOMM" && !vendor.startsWith("QUALCOMM TECHNOLOGIES")) {
             return QualcommCompatibility(QualcommCompatibilityState.UNSUPPORTED, null,
-                "Qualcomm-Hardware konnte nicht bestätigt werden.")
+                UiMessage(R.string.qualcomm_vendor_unknown))
         }
         if ("arm64-v8a" !in hardware.abis || !hardware.fastRpcAvailable) {
             return QualcommCompatibility(QualcommCompatibilityState.RUNTIME_UNAVAILABLE, target,
-                "Die benötigte lokale ARM64-/FastRPC-Laufzeit ist nicht verfügbar.")
+                UiMessage(R.string.fast_rpc_missing))
         }
         val validated = target.validatedDevices.any {
             it.manufacturer.equals(hardware.manufacturer.trim(), ignoreCase = true) &&
@@ -98,8 +98,8 @@ object QualcommTargets {
         }
         return QualcommCompatibility(
             if (validated) QualcommCompatibilityState.SUPPORTED_VALIDATED else QualcommCompatibilityState.SUPPORTED_SOC_UNVALIDATED_DEVICE,
-            target, if (validated) "${target.marketingName} erkannt · kompatibel"
-            else "${target.marketingName} erkannt · dieses Gerätemodell ist noch nicht getestet"
+            target, if (validated) UiMessage(R.string.soc_validated, target.marketingName)
+            else UiMessage(R.string.soc_unvalidated, target.marketingName)
         )
     }
 }

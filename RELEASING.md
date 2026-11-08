@@ -4,7 +4,7 @@
 
 Use JDK 17, Android SDK Platform 36, Build Tools 35.0.0 for the Gradle build, and Build Tools 36.0.0 for the checks below. Use the checked-in Gradle wrapper and keep the JDK, SDK, and tool versions in the release record. Python 3 runs the offline checks and runtime staging. Use ADB and unlocked USB-debugging devices for acceptance.
 
-The v0.12 release target is `de.kf.tapstop`, version code `12`, version name `0.12`. Keep the application ID, namespace, and component names aligned. Check the intended release commit, a clean Git status, the version fields, and the absence of existing conflicting tags. The published v0.11 baseline points to `00f40d54d78d48b398c5662eeed42be3d108c26c`.
+Both v0.12 and v0.13 use `de.kf.tapstop`. Their version codes are `12` and `13` respectively. Release the v0.12 package transition first, then publish v0.13 as an in-place update signed with the same certificate. Keep the application ID, namespace, and component names aligned. Check the intended release commit, a clean Git status, the version fields, and the absence of existing conflicting tags. The published v0.11 baseline points to `00f40d54d78d48b398c5662eeed42be3d108c26c`.
 
 ## Signing key
 
@@ -36,7 +36,7 @@ export TAPSTOP_SIGNING_PROPERTIES=/absolute/private/path/keystore.properties
   :app:testDebugUnitTest :app:lint
 ```
 
-The output to distribute is `app/build/outputs/apk/tapstop/TapStop-Android-0.12.apk`. Use a clean checkout or a clean build for release provenance. Keep inputs, tool versions, and the resulting checksum with the release. Byte-for-byte reproducibility across hosts has yet to be established.
+The output to distribute is `app/build/outputs/apk/tapstop/TapStop-Android-<version>.apk`. Use a clean checkout or a clean build for release provenance. Keep inputs, tool versions, and the resulting checksum with the release. Byte-for-byte reproducibility across hosts has yet to be established.
 
 ## Free source build
 
@@ -58,7 +58,7 @@ The APK is `app/build/outputs/apk/release/app-release-unsigned.apk`. The [source
 ```sh
 bt="$ANDROID_HOME/build-tools/36.0.0"
 cd app/build/outputs/apk/tapstop
-apk=TapStop-Android-0.12.apk
+apk=TapStop-Android-0.13.apk
 "$bt/apksigner" verify --verbose --print-certs "$apk"
 "$bt/zipalign" -c -P 16 4 "$apk"
 "$bt/aapt" dump badging "$apk"
@@ -68,7 +68,7 @@ shasum -a 256 "$apk" > "$apk.sha256"
 shasum -a 256 -c "$apk.sha256"
 ```
 
-Confirm the certificate SHA-256 against the recorded release fingerprint. Confirm `de.kf.tapstop`, version code 12, version name 0.12, minSdk 29, targetSdk 35, a non-debuggable APK, and the expected launcher, microphone foreground service, and accessibility service. The accessibility service must require `android.permission.BIND_ACCESSIBILITY_SERVICE` and point to the service XML. Check that backup remains disabled.
+Confirm the certificate SHA-256 against the recorded release fingerprint. Confirm `de.kf.tapstop`, the version code and name for the intended release, minSdk 29, targetSdk 35, a non-debuggable APK, and the expected launcher, microphone foreground service, and accessibility service. The accessibility service must require `android.permission.BIND_ACCESSIBILITY_SERVICE` and point to the service XML. Check that backup remains disabled.
 
 The full APK must have both V75 and V81 stubs and skeletons. Compare decompressed native libraries and notices to the SHA-256 pins in [runtime-files.json](tools/qualcomm-whisper/runtime-files.json) and [runtime-notices.json](tools/qualcomm-whisper/runtime-notices.json). The SDK JAR is compiled to DEX. Check for its SDK classes there. Confirm both project notices in `assets/notices/`. Inspect the archive for model packages, signing material, test fixtures, or other unexpected files. For the free APK, confirm the absence of the SDK classes, native runtime, skeletons, and Qualcomm notices.
 
@@ -106,7 +106,9 @@ Check that the distributing maintainer can apply Apache 2.0 to the original proj
 
 After rights, tests, APK verification, and both device acceptance checks are complete, commit the release sources, build from that exact commit, and tag it with `git tag -a v0.12 -m "TapStop Android 0.12"`. Push the intended commit and tag. Create a draft GitHub Release for `v0.12`, attach the verified APK and `.sha256` file, verify the uploaded checksum, and publish after review. Keep the instrumentation APK, model packages, and standalone SDK files out of the release.
 
-Suggested release notes cover the new package and durable release signature, parallel installation and manual data setup, the English and German documentation, the scope of the two validated Qualcomm targets and 30-second limit, and the availability of a separate free source build for future F-Droid work.
+For v0.13, build from its separate commit and repeat the artifact and device checks. Verify the installed v0.12 can be updated in place, and check English, German, and the system default through Android’s TapStop language settings. After v0.12 has been published, tag the verified 0.13 commit as `v0.13` and publish its separately verified APK and checksum. See the [0.13 verification record](docs/RELEASE_0.13_VERIFICATION.md).
+
+Suggested v0.12 release notes cover the new package and durable release signature, parallel installation and manual data setup, the English and German documentation, the scope of the two validated Qualcomm targets and 30-second limit, and the availability of a separate free source build for future F-Droid work.
 
 ## Future F-Droid integration
 

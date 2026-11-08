@@ -102,7 +102,7 @@ class DelayedInsertDiagnosticsTest {
     }
     @Test fun disabledDiagnosisNeverStoresCleartextAndMarkerCapturesNoEditor() {
         assertNull(DelayedInsertDiagnostics.begin(context, "PRIVATE", "RAW_SECRET", "PRIVATE"))
-        assertTrue(DelayedInsertDiagnostics.mark(context).contains("deaktiviert"))
+        assertEquals(context.getString(R.string.marker_audio_disabled), DelayedInsertDiagnostics.mark(context))
         assertFalse(File(context.noBackupFilesDir, DelayedInsertDiagnostics.DIRECTORY).exists())
         val read = EditorReadback("abc", 3, 3, 0).json()
         assertFalse(read.getBoolean("whole_editor_verified"))

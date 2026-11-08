@@ -62,9 +62,9 @@ class LocalPipelineTest {
         val failure = runCatching { runtime.prepare() }.exceptionOrNull()
         assertNotNull(failure)
         assertTrue(failure is Exception)
-        assertTrue(failure!!.message!!.contains("SoC"))
+        assertEquals(R.string.soc_unsupported, (failure as UiFailure).text.resource)
         assertEquals(QualcommRuntimePhase.NOT_INITIALIZED, runtime.status.value.phase)
-        assertEquals(failure.message, runtime.status.value.message)
+        assertEquals(failure.text, runtime.status.value.message)
     }
 
     @Test fun localOnlyRecordingLimitAndOriginalCloudModels() {

@@ -1,5 +1,240 @@
-<resources>
-    <string name="accessibility_description">Zeigt die schwebende TapStop-Blase für die Spracheingabe. TapStop liest das fokussierte Eingabefeld, um das Transkript an der Cursorposition einzufügen.</string>
-    <string name="mode_satellite">%1$s\n%2$s</string>
-    <string name="mode_bubble">%1$s %2$s</string>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="en">
+    <string name="app_name" translatable="false">TapStop</string>
+    <string name="accessibility_service_label">TapStop Text Insertion</string>
+    <string name="accessibility_description">Shows the floating TapStop bubble for dictation. TapStop reads the focused text field to insert the transcript at the cursor.</string>
+    <string name="mode_satellite" translatable="false">%1$s\n%2$s</string>
+    <string name="mode_bubble" translatable="false">%1$s %2$s</string>
+    <string name="dash" translatable="false">–</string>
+    <string name="cloud_provider_required">This build requires a cloud provider for speech recognition.</string>
+    <string name="save_provider_key_first">Save your %1$s API key first.</string>
+    <string name="bubble_start_failed">Could not start the bubble.</string>
+    <string name="dashboard" translatable="false">Dashboard</string>
+    <string name="settings">Settings</string>
+    <string name="tap_instructions">Tap once to record. Tap again to transcribe and insert.</string>
+    <string name="speech_recognition">Speech recognition</string>
+    <string name="select_available_provider">Select an available provider.</string>
+    <string name="transcription">Transcription</string>
+    <string name="whisper_large_v3" translatable="false">Whisper Large V3</string>
+    <string name="whisper_large_v3_turbo" translatable="false">Whisper Large V3 Turbo</string>
+    <string name="openai_whisper" translatable="false">OpenAI Whisper-1</string>
+    <string name="gemini_model_details">%1$s · German (de-DE) language hint, verbatim</string>
+    <string name="whisper_large_v3_turbo_fp16" translatable="false">Whisper Large V3 Turbo FP16</string>
+    <string name="personal_dictionary">Personal dictionary</string>
+    <string name="dictionary_description">Enter one term or expression per line. The list is stored locally. When using cloud processing, TapStop sends relevant spellings as context.</string>
+    <string name="dictionary_input">Proper names and technical terms</string>
+    <string name="save_dictionary">Save dictionary</string>
+    <string name="rewrite_modes">Text rewriting: Plus / Chat / Formal</string>
+    <string name="rewrite_configuration">Rewriting with %1$s: %2$s.</string>
+    <string name="local_with_rewrite">Speech recognition runs on the device. The transcript is then sent to %1$s for rewriting.</string>
+    <string name="local_raw">Raw mode: All processing stays on the device.</string>
+    <string name="mode">Mode</string>
+    <string name="mode_picker_hint">Touch and hold the bubble to choose a mode. This leaves recording off.</string>
+    <string name="permissions">Permissions</string>
+    <string name="microphone">Microphone</string>
+    <string name="accessibility_permission">Accessibility for the bubble and direct insertion</string>
+    <string name="accessibility_setup">Enable “%1$s” to use the bubble. If direct insertion fails, TapStop copies the text to the clipboard.</string>
+    <string name="bubble_start">Start floating bubble</string>
+    <string name="bubble_active">Bubble is active</string>
+    <string name="bubble_paused">Bubble paused · enable accessibility</string>
+    <string name="bubble_stop">Stop bubble</string>
+    <string name="text_diagnostics">Temporary insertion text diagnostics</string>
+    <string name="text_diagnostics_description">Stores complete dictations and text read back from the editor on this device without backup. The rolling buffer holds up to 32 MiB and removes old entries when it writes. It stores no audio. Turning it off stops collection and keeps existing data.</string>
+    <string name="text_diagnostics_on">Text diagnostics on</string>
+    <string name="text_diagnostics_off">Text diagnostics off</string>
+    <string name="audio_diagnostics">Save original audio for diagnostics</string>
+    <string name="audio_diagnostics_description">Stores full speech recognition inputs and transcripts on this device without backup. Up to 500 MiB, with unmarked cases kept for up to 14 days and cleanup during diagnostic work. Failed cases are kept preferentially. Turning it off keeps existing data.</string>
+    <string name="audio_diagnostics_on">Audio diagnostics on</string>
+    <string name="audio_diagnostics_off">Audio diagnostics off</string>
+    <string name="mark_insert_error">Mark last insertion error</string>
+    <string name="mark_recording">Mark last completed recording</string>
+    <string name="mark_diagnostic_hint">If speech recognition failed before insertion, mark the last completed recording explicitly. Take a screenshot yourself before marking. Only the last insertion is linked as a candidate.</string>
+    <string name="save_key">Save key</string>
+    <string name="delete_key">Delete key</string>
+    <string name="permission_active">%1$s: %2$s</string>
+    <string name="open_settings">Open</string>
+    <string name="statistics">Statistics</string>
+    <string name="statistics_privacy">Local metadata only. Text and audio are never stored in statistics.</string>
+    <string name="statistics_unavailable">Statistics storage is unavailable. Try again.</string>
+    <string name="reset_statistics">Reset statistics</string>
+    <string name="reset_statistics_title">Reset statistics?</string>
+    <string name="reset_statistics_message">All local usage statistics will be deleted. API keys and settings will be kept.</string>
+    <string name="reset">Reset</string>
+    <string name="cancel">Cancel</string>
+    <string name="api_key_saved">API key saved</string>
+    <string name="api_key_save_failed">Could not save the API key.</string>
+    <string name="granted">Granted</string>
+    <string name="missing">Missing</string>
+    <string name="dictionary_limit_cloud">Up to 200 entries / 8 KiB. OpenAI and Groq use the first entries up to the STT prompt limit. Gemini uses the dictionary only for rewriting.</string>
+    <string name="dictionary_limit_full">Up to 200 entries / 8 KiB. OpenAI and Groq use the first entries up to the STT prompt limit. Gemini and Qualcomm use the dictionary only for rewriting.</string>
+    <string name="dictionary_truncated">Size limit reached. Only complete entries from the start of the list were saved.</string>
+    <string name="dictionary_saved">Dictionary saved.</string>
+    <string name="rewrite_follow_stt">Automatic: match speech recognition</string>
+    <string name="rewrite_follow_last_cloud">Automatic: last OpenAI or Groq STT provider</string>
+    <string name="provider_key">%1$s API key</string>
+    <string name="provider_key_saved">%1$s API key (saved)</string>
+    <string name="mode_raw">Raw</string>
+    <string name="mode_plus" translatable="false">Plus</string>
+    <string name="mode_chat" translatable="false">Chat</string>
+    <string name="mode_formal" translatable="false">Formal</string>
+    <string name="today">Today</string>
+    <string name="week">Week</string>
+    <string name="month">Month</string>
+    <string name="all_time">All</string>
+    <string name="bubble_window">TapStop bubble</string>
+    <string name="mode_picker_window">TapStop mode picker</string>
+    <string name="bubble_record_start">TapStop: start recording</string>
+    <string name="bubble_record_stop">TapStop: recording, tap to stop</string>
+    <string name="bubble_preparing">TapStop: preparing the local model</string>
+    <string name="bubble_processing">TapStop: processing text</string>
+    <string name="select_mode">Select %1$s mode</string>
+    <string name="bubble_accessibility_status" translatable="false">%1$s. %2$s</string>
+    <string name="bubble_accessibility_failed">Could not start the bubble. Check the accessibility settings.</string>
+    <string name="microphone_service_ready">Microphone service ready</string>
+    <string name="save_rewrite_key_first">Save your %1$s API key for rewriting first.</string>
+    <string name="local_preparing">Preparing the local model…</string>
+    <string name="recording_failed">Recording failed. Try again.</string>
+    <string name="no_recording">No recording available.</string>
+    <string name="rewrite_timeout">Rewriting timed out. The raw transcript was copied.</string>
+    <string name="transcription_timeout">Transcription timed out. Try again.</string>
+    <string name="copied_to_clipboard">Text copied to the clipboard. Paste it to insert it.</string>
+    <string name="rewrite_key_missing">A %1$s API key is required for rewriting.</string>
+    <string name="local_not_ready">Local speech recognition is not ready. Check the model in Settings.</string>
+    <string name="rewrite_failed_copied">Rewriting failed. The raw transcript was copied.</string>
+    <string name="transcription_failed">Transcription failed. Check your provider settings and try again.</string>
+    <string name="marker_audio_disabled">Audio diagnostics are off.</string>
+    <string name="marker_audio_requested">Audio marker requested. Existing insertion links take precedence.</string>
+    <string name="marker_insert_requested">%1$s Marker requested: %2$s. Association: %3$s. No screenshot captured.</string>
+    <string name="marker_no_insertion">no insertion</string>
+    <string name="dashboard_title">Your TapStop</string>
+    <string name="dashboard_tagline">Say it. Done.</string>
+    <string name="stats_load_failed">Could not save or load statistics.</string>
+    <string name="metric_words">Words</string>
+    <string name="metric_dictations">Dictations</string>
+    <string name="metric_speaking_time">Speaking time</string>
+    <string name="metric_wpm">Avg. WPM</string>
+    <string name="raw_and_wpm_explanation">Words from the raw transcript · WPM over the full recording</string>
+    <string name="first_dictation">Your next dictation gets you started.</string>
+    <string name="activity">Activity</string>
+    <string name="providers">Providers</string>
+    <string name="no_usage">No usage yet</string>
+    <string name="stt_stats_explanation">STT time is the median. Speed relative to real time is total recording time divided by total STT time. Includes successful dictations with measurable times.</string>
+    <string name="processing_time">Processing time</string>
+    <string name="stt_median">STT time · median</string>
+    <string name="total_median">Total · median</string>
+    <string name="rewrite_median">Rewrite · median</string>
+    <string name="total_latency_explanation">Total time runs from the end of recording to the final text and covers successful dictations.</string>
+    <string name="apps" translatable="false">Apps</string>
+    <string name="no_target_apps">No target apps yet</string>
+    <string name="unknown_app">Unknown</string>
+    <string name="modes">Modes</string>
+    <string name="raw_to_final">Raw → final words</string>
+    <string name="final_words_explanation">Final words come from the text prepared for insertion or copying.</string>
+    <string name="dashboard_privacy">Statistics stay on this device and contain no text or audio.</string>
+    <string name="this_week">This week</string>
+    <string name="calendar_all_time">Last 53 weeks · oldest on the left, today on the right</string>
+    <string name="calendar_legend">0 · 1–99 · 100–499 · 500+ words</string>
+    <string name="format_language">en</string>
+    <string name="duration_seconds" translatable="false">%1$s s</string>
+    <string name="duration_minutes_seconds" translatable="false">%1$s min %2$s s</string>
+    <string name="realtime_factor">%1$s× real time</string>
+    <string name="stt_time_and_speed">STT time %1$s · %2$s</string>
+    <string name="dictations_and_words" translatable="false">%1$s · %2$s</string>
+    <string name="count_and_share" translatable="false">%1$s · %2$s</string>
+    <string name="mode_raw_to_final">%1$s · Raw → final</string>
+    <string name="counts_raw_to_final" translatable="false">%1$s → %2$s</string>
+    <string name="calendar_day_description" translatable="false">%1$s: %2$s</string>
+    <plurals name="word_count">
+        <item quantity="one">%1$s word</item>
+        <item quantity="other">%1$s words</item>
+    </plurals>
+    <plurals name="dictation_count">
+        <item quantity="one">%1$s dictation</item>
+        <item quantity="other">%1$s dictations</item>
+    </plurals>
+    <plurals name="processing_errors">
+        <item quantity="one">%1$s failed attempt · excluded from usage totals</item>
+        <item quantity="other">%1$s failed attempts · excluded from usage totals</item>
+    </plurals>
+    <string name="local_ready">Local model ready.</string>
+    <string name="local_restart">Fully close and reopen TapStop. Local recognition has no CPU or cloud fallback.</string>
+    <string name="runtime_failed">Could not load the Qualcomm runtime.</string>
+    <string name="model_invalid">Invalid model package.</string>
+    <string name="import_failed">Could not import the model. Check the folder and available storage.</string>
+    <string name="prepare_failed">Could not prepare the local model.</string>
+    <string name="model_path_invalid">Invalid model path.</string>
+    <string name="soc_unsupported">No Qualcomm model package is available for this SoC. Model packages are SoC-specific.</string>
+    <string name="qualcomm_vendor_unknown">Could not confirm Qualcomm hardware.</string>
+    <string name="fast_rpc_missing">The required ARM64/FastRPC runtime is unavailable.</string>
+    <string name="soc_validated">%1$s detected · compatible</string>
+    <string name="soc_unvalidated">%1$s detected · this device model has yet to be tested</string>
+    <string name="model_storage_unavailable">App model storage is unavailable.</string>
+    <string name="model_storage_create_failed">Could not create model storage.</string>
+    <string name="model_import_file_missing">%1$s is missing from the selected model folder.</string>
+    <string name="model_storage_full">There is too little free space for the local model.</string>
+    <string name="model_import_start_failed">Could not start the model import.</string>
+    <string name="model_import_finish_failed">Could not finish the model import.</string>
+    <string name="model_file_path_invalid">The model package contains an invalid file path.</string>
+    <string name="model_metadata_too_large">The model metadata is too large.</string>
+    <string name="model_file_size_invalid">Invalid file size for %1$s.</string>
+    <string name="model_file_hash_invalid">Checksum mismatch for %1$s.</string>
+    <string name="model_metadata_incompatible">Incompatible model package. %1$s does not match %2$s.</string>
+    <string name="model_file_list_invalid">Invalid list of model files.</string>
+    <string name="model_file_incomplete">Incomplete model file %1$s.</string>
+    <string name="model_select_folder">Select a model folder.</string>
+    <string name="model_file_ambiguous">Ambiguous model file %1$s.</string>
+    <string name="model_folder_unreadable">Could not read the model folder.</string>
+    <string name="model_verified">Model verified and ready.</string>
+    <string name="model_missing">The local model is missing. Import the matching model package.</string>
+    <string name="model_incomplete">Model package incomplete. Missing files: %1$s.</string>
+    <string name="model_present">Model present · checksums are verified during preparation.</string>
+    <string name="runtime_not_loaded">Local runtime has yet to load.</string>
+    <string name="runtime_loading">Verifying and loading the local model…</string>
+    <string name="runtime_ready">Whisper Large V3 Turbo is ready.</string>
+    <string name="runtime_transcribing">Transcribing on the device…</string>
+    <string name="runtime_sdk_missing">This APK lacks the Qualcomm runtime. Use a build with the locally provided SDK.</string>
+    <string name="runtime_library_missing">Qualcomm runtime incomplete. Missing library: %1$s.</string>
+    <string name="runtime_skeleton_missing">The Qualcomm runtime for this target is missing (%1$s).</string>
+    <string name="resident_model_changed">The loaded model files have changed. Verify the model and fully restart TapStop.</string>
+    <string name="runtime_library_hash">Incompatible Qualcomm runtime. SHA-256 mismatch for %1$s.</string>
+    <string name="runtime_folder_unavailable">The local runtime folder is unavailable.</string>
+    <string name="runtime_skeleton_unsupported">No validated skeleton for this target.</string>
+    <string name="runtime_skeleton_hash">Qualcomm skeleton SHA-256 mismatch.</string>
+    <string name="runtime_skeleton_install">Could not install the Qualcomm skeleton.</string>
+    <string name="local_inspection_failed">Local storage or runtime is unavailable.</string>
+    <string name="local_experimental">On-device transcription (experimental)</string>
+    <string name="local_model_and_backend" translatable="false">Whisper Large V3 Turbo · Qualcomm NPU</string>
+    <string name="local_experimental_description">Processes speech on the device. Speed, stability, and accuracy depend heavily on the hardware. Intended for testing.</string>
+    <string name="checking_compatibility">Checking device compatibility…</string>
+    <string name="local_duration_limit">Speech recognition runs on the device. Up to 30 seconds per dictation.</string>
+    <string name="import_model_folder">Import model folder</string>
+    <string name="prepare_model">Verify and prepare model</string>
+    <string name="hide_diagnostics">Hide diagnostics</string>
+    <string name="local_diagnostics">Local STT diagnostics</string>
+    <string name="local_diagnostics_clip">TapStop local STT diagnostics</string>
+    <string name="copy_diagnostics">Copy diagnostics</string>
+    <string name="no_target">No target</string>
+    <string name="local_diagnostic_details">Device: %1$s %2$s\nSoC: %3$s (%4$s)\nABI: %5$s\nQualcomm target: %6$s\nHTP: %7$s\nLocal STT: %8$s\nModel: Whisper Large V3 Turbo FP16\nModel status: %9$s\nRuntime: %10$s\nLast NPU status: unconfirmed (check native device logs for execution evidence)</string>
+    <string name="local_transcription_failed">Local transcription failed. Check the model in Settings and try again.</string>
+    <string name="model_importing">Importing and verifying the model…</string>
+    <string name="gemini_key_missing">A Google Gemini API key is required.</string>
+    <string name="gemini_file_limit">Gemini accepts files up to 2 GB.</string>
+    <string name="gemini_duration_unreadable">Gemini could not read the recording duration.</string>
+    <string name="gemini_duration_limit">Gemini supports recordings up to one hour.</string>
+    <string name="gemini_response_invalid">Gemini returned an invalid response.</string>
+    <string name="gemini_network_error">Network error during Gemini transcription.</string>
+    <string name="gemini_timeout">Gemini transcription timed out.</string>
+    <string name="gemini_cancelled">Gemini transcription was cancelled.</string>
+    <string name="gemini_upload_invalid">Gemini returned an invalid upload address.</string>
+    <string name="gemini_audio_prepare_failed">Gemini could not prepare the audio file.</string>
+    <string name="gemini_file_uri_missing">Gemini returned no file URI.</string>
+    <string name="gemini_incomplete">Gemini did not complete the transcription.</string>
+    <string name="gemini_no_transcript">Gemini returned no transcript.</string>
+    <string name="gemini_request_rejected">Gemini rejected the request (HTTP 400). Check the API key and recording.</string>
+    <string name="gemini_audio_too_large">The audio file exceeds Gemini’s size limit.</string>
+    <string name="provider_key_invalid">Check whether your %1$s API key is valid and has access to this model.</string>
+    <string name="provider_rate_limit">%1$s request limit reached. Try again later.</string>
+    <string name="provider_http_error">The request to %1$s failed (HTTP %2$d).</string>
+    <string name="provider_no_transcript">%1$s returned no transcript.</string>
+    <string name="provider_no_rewrite">%1$s returned no rewritten text.</string>
+    <string name="rewrite_failed_detail">Rewriting failed. The raw transcript was copied. %1$s</string>
 </resources>

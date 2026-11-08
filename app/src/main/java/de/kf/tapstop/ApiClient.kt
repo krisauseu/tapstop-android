@@ -58,7 +58,7 @@ class ApiClient internal constructor(
             diagnostic?.event("stt_upload_complete")
             val result = response(connection, "stt")
             val transcript = result.optString("text").takeIf { it.isNotBlank() }
-                ?: error("$providerName hat kein Transkript geliefert.")
+                ?: throw UiFailure(UiMessage(R.string.provider_no_transcript, providerName), detail = "$providerName hat kein Transkript geliefert.")
             diagnostic?.event("stt_parsing_complete")
             return transcript
         } finally { connection.disconnect(); if (activeConnection === connection) activeConnection = null; diagnostic?.connectionClosed() }
@@ -96,7 +96,7 @@ class ApiClient internal constructor(
             val result = response(connection, "rewrite")
             val rewritten = result.getJSONArray("choices").getJSONObject(0).getJSONObject("message")
                 .getString("content").trim().takeIf { it.isNotBlank() }
-                ?: error("$providerName hat keinen überarbeiteten Text geliefert.")
+                ?: throw UiFailure(UiMessage(R.string.provider_no_rewrite, providerName), detail = "$providerName hat keinen überarbeiteten Text geliefert.")
             diagnostic?.event("rewrite_parsing_complete")
             return rewritten
         } finally { connection.disconnect(); if (activeConnection === connection) activeConnection = null; diagnostic?.connectionClosed() }
@@ -124,7 +124,12 @@ class ApiClient internal constructor(
         if (code !in 200..299) {
             val message = runCatching { JSONObject(body).getJSONObject("error").getString("message") }
                 .getOrDefault("HTTP $code")
-            error("$providerName: $message")
+            val notice = when (code) {
+                401, 403 -> UiMessage(R.string.provider_key_invalid, providerName)
+                429 -> UiMessage(R.string.provider_rate_limit, providerName)
+                else -> UiMessage(R.string.provider_http_error, providerName, code)
+            }
+            throw UiFailure(notice, detail = "$providerName: $message")
         }
         return JSONObject(body)
     }
