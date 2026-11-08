@@ -12,7 +12,6 @@ TapStop ist eine systemweite Spracheingabe für Android. **Tippen → sprechen �
 - Verschiebbares Accessibility-Overlay mit Auswahlfächer für vier Modi.
 - Getrennte Wahl der Anbieter für Sprache zu Text (STT) und Textüberarbeitung.
 - Persönliches Wörterbuch, lokale Nutzungsstatistik sowie getrennt zuschaltbare Audio- und Textdiagnose.
-- Experimentelle Spracherkennung auf dem Gerät für zwei validierte Qualcomm-Targets im vollständigen Build, mit separatem Modellimport.
 
 ## 3. Screenshots
 
@@ -25,20 +24,16 @@ Geplant sind Screenshots des Dashboards, der Provider-Einstellungen und der Blas
 | OpenAI | `whisper-1` | `gpt-4o-mini`, Temperatur 0,3 |
 | Groq | `whisper-large-v3` oder `whisper-large-v3-turbo` | `openai/gpt-oss-120b`, Temperatur 0,2 für Plus und Formal, 0,4 für Chat |
 | Google Gemini, manuell wählbar | `gemini-3.5-transcribe`, wortgetreu mit dem Sprachhinweis `de-DE` | Separat ausgewähltes OpenAI oder Groq |
-| Lokal, Qualcomm NPU | Whisper Large V3 Turbo FP16 auf dem Gerät | Separat ausgewähltes OpenAI oder Groq |
 
-STT und Überarbeitung lassen sich unabhängig kombinieren, etwa Gemini für die Transkription und Groq für die Überarbeitung. Die automatische Überarbeitung folgt bei OpenAI und Groq dem gewählten STT-Anbieter. Bei Gemini oder Local verwendet sie die letzte STT-Auswahl von OpenAI oder Groq. Neue Profile beginnen mit OpenAI. TapStop legt den STT-Anbieter beim Aufnahmestart fest und liest Modus und Überarbeitungseinstellungen beim Stopp.
+STT und Überarbeitung lassen sich unabhängig kombinieren, etwa Gemini für die Transkription und Groq für die Überarbeitung. Die automatische Überarbeitung folgt bei OpenAI und Groq dem gewählten STT-Anbieter. Bei Gemini verwendet sie die letzte STT-Auswahl von OpenAI oder Groq. Neue Profile beginnen mit OpenAI. TapStop legt den STT-Anbieter beim Aufnahmestart fest und liest Modus und Überarbeitungseinstellungen beim Stopp.
 
 Gemini sendet die originale M4A über die Google Interactions API mit `store=false`. Überschreitet der Base64-kodierte Request einschließlich JSON 20 MB, lädt TapStop das Audio über die Files API hoch und versucht, es nach Erfolg, Fehler oder Abbruch zu löschen. Ein Verbindungsverlust kann die Löschung verhindern. Google löscht hochgeladene Dateien nach 48 Stunden automatisch. Gemini akzeptiert Aufnahmen bis zu einer Stunde. Bei Gemini-Diktaten wird das persönliche Wörterbuch bei der Überarbeitung mit OpenAI oder Groq verwendet. [Transkription](https://aistudio.google.com/docs/transcribe) · [Files API](https://aistudio.google.com/docs/files)
 
-## 5. Lokale Spracherkennung
+## 5. Cloud-Releases
 
-Der experimentelle Anbieter Local verwendet die Qualcomm NPU. Wähle in den Einstellungen **Modellordner importieren** und das Modellpaket für dein Target. Das etwa 2,2 GB große Paket wird separat von der APK bereitgestellt. Der Importer prüft Target, Runtime-Versionen, Größen und Hashes. Bereite das Modell vor dem Diktat vor und plane für die erste Initialisierung zusätzliche Zeit ein. Local braucht keinen API-Key.
+Ab v0.12 nutzen die GitHub-APKs OpenAI, Groq und Gemini für die Spracherkennung. Falls in deiner Installation aus einem internen Build noch Local gewählt ist, wähle in den Einstellungen ausdrücklich einen Cloud-Anbieter und hinterlege den passenden API-Key. TapStop behält die vorhandenen Einstellungen und Daten und wartet vor der Aufnahme auf deine Auswahl.
 
-- **Local + Roh** verarbeitet Spracherkennung und Text vollständig auf dem Gerät. TapStop sendet weder Audio noch Transkript an einen Cloud-Anbieter.
-- **Local + Plus, Chat oder Formal** transkribiert auf dem Gerät und sendet den resultierenden Text zur Überarbeitung an den konfigurierten Cloud-Anbieter.
-
-Local stoppt automatisch nach 30 Sekunden. Ein weiterer Tap beendet eine kürzere Aufnahme. Die Grenze gilt nur für Local. Der freie Quellcode-Build blendet Local und den Modellimport aus. [Qualcomm-Backend und Modellimport](../QUALCOMM_LOCAL_STT.md) · [Qualcomm-Lizenzinventar](../QUALCOMM_LICENSING.md)
+Das experimentelle Qualcomm-Backend und der Modellimport bleiben für die interne Entwicklung verfügbar. [Interner Entwicklungsbuild](../../RELEASING.md#internal-development-build)
 
 ## 6. Textverarbeitungsmodi
 
@@ -51,7 +46,7 @@ Halte die Blase im Ruhezustand **480 ms** gedrückt, um den Fächer zu öffnen. 
 
 ## 7. Installation
 
-TapStop benötigt Android 10 oder neuer. Die zuletzt veröffentlichte APK und ihre Release Notes stehen unter [GitHub Releases](https://github.com/krisauseu/tapstop-android/releases). Der vollständige Build für v0.13 heißt `TapStop-Android-0.13.apk`.
+TapStop benötigt Android 10 oder neuer. Lade APK und SHA-256-Prüfsumme von [GitHub Releases](https://github.com/krisauseu/tapstop-android/releases) herunter und prüfe die Prüfsumme vor der Installation. Android kann dich bitten, deinem Browser oder Dateimanager die Installation aus dieser Quelle zu erlauben.
 
 Version 0.12 führte die Application-ID und den Kotlin-Namespace `de.kf.tapstop` sowie ein eigenes Release-Zertifikat ein. Android installiert sie parallel zu `de.kf.blitztext` aus v0.11. Version 0.13 (Versionscode `13`) aktualisiert 0.12 bei gleicher Signatur direkt und behält dessen App-Daten. Siehe [Migrationsanleitung](../../RELEASING.md#package-migration-from-v011).
 
@@ -59,14 +54,14 @@ Version 0.11 stellte Blase und Fächer auf `TYPE_ACCESSIBILITY_OVERLAY` um. Vers
 
 ## 8. Konfiguration
 
-1. Wähle in **Einstellungen** einen STT-Anbieter. Speichere für OpenAI, Groq oder Gemini den passenden API-Key. Importiere und prüfe für Local das passende Modell.
+1. Wähle in **Einstellungen** einen STT-Anbieter. Speichere für OpenAI, Groq oder Gemini den passenden API-Key.
 2. Wähle gegebenenfalls ein Groq-STT-Modell. Konfiguriere für Plus, Chat oder Formal OpenAI oder Groq für die Überarbeitung.
 3. Erlaube Mikrofonzugriff und aktiviere **TapStop Texteingabe** in den Android-Bedienungshilfen.
 4. Starte die Blase aus der sichtbaren TapStop-App. Fokussiere ein Eingabefeld einer anderen App, tippe auf die Blase, sprich und tippe erneut. Während der Aufnahme ist die Blase rot, während der Verarbeitung blau.
 
-Das persönliche Wörterbuch nimmt pro Zeile einen Begriff oder Ausdruck auf, bis zu 200 Einträge oder 8 KiB. OpenAI und Groq STT verwenden Einträge vom Listenanfang bis zum Prompt-Limit. Bei Gemini und Local wird das Wörterbuch bei der Cloud-Überarbeitung genutzt. [Persönliches Wörterbuch](../PERSONAL_DICTIONARY.md)
+Das persönliche Wörterbuch nimmt pro Zeile einen Begriff oder Ausdruck auf, bis zu 200 Einträge oder 8 KiB. OpenAI und Groq STT verwenden Einträge vom Listenanfang bis zum Prompt-Limit. Bei Gemini wird das Wörterbuch bei der Cloud-Überarbeitung genutzt. [Persönliches Wörterbuch](../PERSONAL_DICTIONARY.md)
 
-Wähle für v0.12 Anbieter und Modi erneut, gib Keys wieder ein, übertrage Wörterbucheinträge manuell und positioniere die neue Blase. Importiere Modelle erneut aus dem ursprünglichen Modellordner. Alte Statistiken und private Diagnosedateien bleiben im Speicher der alten App.
+Wähle für v0.12 Anbieter und Modi erneut, gib Keys wieder ein, übertrage Wörterbucheinträge manuell und positioniere die neue Blase. Alte Statistiken und private Diagnosedateien bleiben im Speicher der alten App.
 
 ### Oberflächensprache
 
@@ -95,7 +90,7 @@ TapStop öffnet das Dashboard. **Heute**, **Woche** (Montag–Sonntag), **Monat*
 
 Eine erfolgreiche Verarbeitung zählt auch, wenn TapStop den Text über den Clipboard-Fallback bereitstellt. Ein späteres manuelles Einfügen kann TapStop nicht messen. Der Erfolgsstatus erfasst die Verarbeitung. Die Übernahme durch die Ziel-App wird soweit möglich separat geprüft. Die monotone Android-Uhr misst STT um den Transkriptionsaufruf, Rewrite um den Überarbeitungsaufruf und die Gesamtzeit vom Aufnahmestopp bis zum fertigen Text. Fehlversuche speichern nur vorhandene Messwerte. Unvollständige Schritte bleiben `NULL`. Fehlversuche sind von Nutzungszahlen und Latenzmedianen ausgeschlossen.
 
-Der Provider-/Modellvergleich zeigt **× Echtzeit** als Summe der Aufnahmedauern geteilt durch die Summe der STT-Zeiten erfolgreicher Diktate mit positiven Werten in beiden Feldern. 30 Sekunden Audio bei einer Sekunde STT ergeben beispielsweise 30×. Ein Strich kennzeichnet fehlende Messwerte. Die absolute STT-Zeit bleibt als Median sichtbar. Local erscheint separat als **Qualcomm NPU / Whisper Large V3 Turbo** (`qualcomm` / `whisper-large-v3-turbo`). Die Modellvorbereitung zählt nicht zur STT-Latenz.
+Der Provider-/Modellvergleich zeigt **× Echtzeit** als Summe der Aufnahmedauern geteilt durch die Summe der STT-Zeiten erfolgreicher Diktate mit positiven Werten in beiden Feldern. 30 Sekunden Audio bei einer Sekunde STT ergeben beispielsweise 30×. Ein Strich kennzeichnet fehlende Messwerte. Die absolute STT-Zeit bleibt als Median sichtbar. Statistiken aus internen Builds können weiterhin Local-Diktate enthalten.
 
 Die private SQLite-Datenbank `usage.db` verwendet Schema-Version 1, Tabelle `dictations` und Index `dictations_timestamp(timestamp)`.
 
@@ -120,27 +115,19 @@ Verwende JDK 17 (`JAVA_HOME`), Android SDK Platform 36 und den eingecheckten Gra
 ./gradlew :app:assembleDebug :app:lint :app:testDebugUnitTest :app:assembleDebugAndroidTest
 ```
 
-Der Standardbuild verwendet freie Quellen und Abhängigkeiten, unterstützt alle drei Cloud-Anbieter und erzeugt `app/build/outputs/apk/debug/app-debug.apk`. Übergib für den vollständigen Build `-PqualcommRuntimeDir=/absolute/path/to/runtime` mit dem festgelegten VoiceAI- und QAIRT-Bundle. `packageTapStop` baut den signierten vollständigen Release mit externen Signierdaten. [Release- und Signaturablauf](../../RELEASING.md) · [Qualcomm-Staging-Werkzeuge](../../tools/qualcomm-whisper/README.md)
+Der Standardbuild unterstützt die drei Cloud-Anbieter und erzeugt `app/build/outputs/apk/debug/app-debug.apk`. `packageTapStop` baut die signierte Cloud-APK mit externer Signierkonfiguration. [Release- und Signaturablauf](../../RELEASING.md)
 
 JVM und Robolectric prüfen Gesten, Modusfächer, Persistenz, Roh ohne Überarbeitung, Request-Modelle, Temperaturen, exakte Prompts, Modellimport, Targetzuordnung, Runtime-Lebenszyklus, Providertrennung und Local-Statistik. Die separate Geräte-Instrumentierung nutzt eine temporäre Datenbank und testet Wortzählung, Mediane, gewichtete WPM, Fehlermetriken, Zeitraumgrenzen, Schema, Persistenz, Reset, native InputConnection und Clipboard-Fallback. Der Runner verbindet die aktivierte TapStop-Bedienungshilfe erneut und erhält andere aktivierte Dienste. [Gerätetests](../../DEVICE_TESTS.md) · [Einfügetests](../../INSERT_DEVICE_TESTS.md) · [Instrumentierung ausführen](../../RELEASING.md#device-tests)
 
 ## 13. Gerätekompatibilität
 
-Die historische Geräteabnahme verwendete echte Mikrofon-Diktate auf diesen Qualcomm-Targets.
-
-| SoC und HTP-Target | Getestetes Gerät |
-| --- | --- |
-| Snapdragon 8 Gen 3 · SM8650 · HTP V75 | Samsung Galaxy S24 Ultra (SM-S928B) |
-| Snapdragon 8 Gen 5 · SM8845 / SM8845P · HTP V81 | HONOR MagicPad 4 (YLE-W09) |
-
-TapStop erkennt den SoC automatisch. Andere Geräte mit passendem Target werden als ungetestet gekennzeichnet. Der vollständige Build deaktiviert Local auf unbekannten Targets. Die Geräteprotokolle decken Roh, Plus mit Groq, Einfügung, Statistik und HTP-Ausführungsnachweise ab. Ergebnisse von Forschungs-Apps und Tests auf aktuellen Geräten lassen die gesonderte Abnahme des integrierten Builds und Tests auf Android 10–12 offen. [Geräteabnahme](../../DEVICE_TESTS.md)
+TapStop nutzt die Mikrofon- und Bedienungshilfe-Schnittstellen von Android 10 und neuer. Die bisherigen Cloud-Prüfungen für v0.13 auf Android 10, 11 und 12L liefen auf AOSP-Emulatoren. [0.13-Prüfprotokoll](../RELEASE_0.13_VERIFICATION.md)
 
 ## 14. Bekannte Einschränkungen
 
-- Local ist auf die gelisteten validierten Geräte und Targets begrenzt. Allgemeine Snapdragon-Unterstützung ist nicht nachgewiesen. Diktate über 30 Sekunden mittels Chunking sind für eine spätere Entwicklung vorgesehen.
-- Einzelne Aufnahmen nahe 30 Sekunden scheitern mit VoiceAI `SPECTROGRAM FAIL`. TapStop meldet einen Fehler, fügt keinen Teiltext ein und überspringt die Cloud-Überarbeitung. Ein kürzeres Diktat kann das geladene Modell wiederverwenden.
-- Release 0.12 startet in einem separaten Android-Datenbereich. Cloud-Keys, Statistik, Modelle und Accessibility-Freigabe müssen getrennt behandelt werden.
-- Der freie Build ist für eine spätere F-Droid-Prüfung gedacht und benötigt ein eigenes Konto oder einen eigenen Key für externe STT-Dienste. [Hinweise zu F-Droid](../../RELEASING.md#future-f-droid-integration)
+- Release 0.12 startet in einem separaten Android-Datenbereich. Cloud-Keys, Statistik und Accessibility-Freigabe müssen getrennt behandelt werden.
+- Auf dem Galaxy S24 Ultra ließ sich die Blase laut Geräteprüfung bei aktivem TalkBack nicht antippen. Die gesprochenen Beschriftungen wurden nicht verifiziert.
+- Die Spracherkennung benötigt eine Internetverbindung und einen eigenen API-Key für den ausgewählten Anbieter.
 
 ## 15. Mitarbeit
 
@@ -151,5 +138,3 @@ Lege für eine weitere Sprache eine `values-<locale>/strings.xml` neben den engl
 ## 16. Lizenz und Drittanbieterhinweise
 
 Der Projektlizenztext für TapStops eigenen Quellcode ist die Apache License 2.0. Die Release-Checkliste beschreibt die Bestätigung der Rechte vor öffentlicher Distribution. TapStop ist eine eigenständige Android-Implementierung, inspiriert von Christoph Magnussens quelloffener macOS-App Blitztext. Deren MIT-Attribution bleibt erhalten. AndroidX und weitere Abhängigkeiten behalten ihre jeweiligen Lizenzen. [Apache License 2.0](../../LICENSE) · [Blitztext-MIT-Hinweis](../../THIRD_PARTY_LICENSE_BLITZTEXT_MAC.txt)
-
-Die vollständige APK enthält proprietären Qualcomm-VoiceAI- und QAIRT-Objektcode unter den einschlägigen SDK-Bedingungen mit unveränderten Hinweisen. Modellgewichte und für ein Target kompilierte Pakete unterliegen separaten Bedingungen und werden eigenständig importiert. Das Repository enthält den Integrationscode und die Werkzeuge. [Qualcomm-Lizenzinventar](../QUALCOMM_LICENSING.md)

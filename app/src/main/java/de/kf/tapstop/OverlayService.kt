@@ -119,14 +119,18 @@ class OverlayService : Service() {
 
     private fun startRecording() {
         val provider = settings.provider
+        if (!BuildConfig.QUALCOMM_RUNTIME_INCLUDED && provider == Provider.QUALCOMM_LOCAL) {
+            toast(getString(R.string.cloud_provider_required)); return
+        }
         if (provider.isCloud && settings.apiKey(provider).isBlank()) {
             toast(getString(R.string.save_provider_key_first, provider.label)); return
         }
         if (settings.mode.usesRewrite && settings.apiKey(settings.rewriteProvider).isBlank()) {
             toast(getString(R.string.save_rewrite_key_first, settings.rewriteProvider.label)); return
         }
-        if (provider == Provider.QUALCOMM_LOCAL) {
+        if (BuildConfig.QUALCOMM_RUNTIME_INCLUDED && provider == Provider.QUALCOMM_LOCAL) {
             val runtime = QualcommRuntime.get(this)
+            val stt: SpeechToTextProvider = runtime
             phase = Phase.PREPARING
             render()
             val preparationNotice = if (runtime.status.value.phase != QualcommRuntimePhase.READY)
@@ -135,7 +139,7 @@ class OverlayService : Service() {
             val token = ++processingToken
             worker.execute {
                 try {
-                    runtime.prepare()
+                    stt.prepare()
                     main.post {
                         preparationNotice?.cancel()
                         if (token == processingToken && phase == Phase.PREPARING) beginRecording(provider)
@@ -331,9 +335,10 @@ class OverlayService : Service() {
                         } else {
                             val fallback = if (provider == Provider.QUALCOMM_LOCAL) R.string.local_transcription_failed
                                 else R.string.transcription_failed
-                            val runtimeStatus = if (provider == Provider.QUALCOMM_LOCAL) QualcommRuntime.get(this).status.value else null
-                            val message = runtimeStatus?.takeIf { it.phase == QualcommRuntimePhase.FAILED }?.message
-                                ?: e.uiMessage(fallback)
+                            val runtimeMessage = if (BuildConfig.QUALCOMM_RUNTIME_INCLUDED && provider == Provider.QUALCOMM_LOCAL)
+                                QualcommRuntime.get(this).status.value.takeIf { it.phase == QualcommRuntimePhase.FAILED }?.message
+                            else null
+                            val message = runtimeMessage ?: e.uiMessage(fallback)
                             toast(message.resolve(this))
                         }
                         reset()
