@@ -2,7 +2,7 @@
 
 ## Aufzeichnung und Bedienung
 
-Unter **Einstellungen → Temporäre Insert-Textdiagnose** gibt es einen Schalter und **„Letzten Einfügefehler markieren“**. In neuen Installationen ist die Textaufzeichnung aus; sie existiert nur in Debug-Builds. Für die ausdrücklich autorisierten Tests und die anschließende Alltagsnutzung wurde sie auf beiden Geräten eingeschaltet. Ausschalten stoppt neue Textdatensätze und Nachkontrollen, bewahrt bereits gespeicherte Daten. Die ältere textfreie Insert-Diagnostik läuft unverändert separat weiter.
+Unter **Einstellungen → Temporäre Insert-Textdiagnose** gibt es einen Schalter und **„Letzten Einfügefehler markieren“**. In neuen Installationen ist die Textaufzeichnung aus; sie ist seit v0.12 auch in signierten Release-Builds verfügbar. Die unten genannten Aktivierungen beziehen sich auf historische Gerätetests. Für die ausdrücklich autorisierten Tests und die anschließende Alltagsnutzung wurde sie auf beiden Geräten eingeschaltet. Ausschalten stoppt neue Textdatensätze und Nachkontrollen, bewahrt bereits gespeicherte Daten. Die ältere textfreie Insert-Diagnostik läuft unverändert separat weiter.
 
 Pro protokollierter `deliver()`-Einfügung:
 
@@ -58,7 +58,7 @@ Weitere Grenzen: Passwortfelder, fehlende/verspätete Framework-Ereignisse, kapu
 Private, von Backup und Gerätetransfer ausgeschlossene Dateien:
 
 ```
-/data/user/0/de.kf.blitztext/no_backup/insert-delayed-diagnostics/events-*.jsonl
+/data/user/0/de.kf.tapstop/no_backup/insert-delayed-diagnostics/events-*.jsonl
 ```
 
 Abgebrochene AtomicFile-Schreibreste werden beim nächsten Schreiben bereinigt, vorhandene AtomicFile-Backups wiederhergestellt. 16 atomisch geschriebene Segmente zu höchstens 2 MiB, zusammen höchstens **32 MiB**, zuzüglich einer vorübergehenden atomaren Schreibkopie von höchstens 2 MiB. Pro Segment höchstens 4.096 Ereignisse. Im aktiven Segment werden beim Schreiben Ereignisse älter als **14 Tage** entfernt. Geschlossene Segmente werden beim nächsten Schreiben gelöscht, sobald ihr letzter Schreibzeitpunkt mehr als 14 Tage zurückliegt; einzelne ältere Ereignisse darin können bis zur Segmentbereinigung erhalten bleiben. Zusätzlich verdrängt die 32-MiB-Grenze ältere Segmente. Bei einer nicht mehr schreibenden App gibt es keine zeitgesteuerte Löschung. Ausschalten löscht nichts. Ein einzelner Textstand über 65.536 UTF-16-Einheiten wird ganz ausgelassen und mit `*_omitted` gekennzeichnet; Editor-Rückgaben über 131.072 ebenso. Die üblichen Alltagsdiktate werden vollständig gespeichert; mehrtägige Erhaltung hängt von ihrem Umfang ab, ist wegen des Ringpuffers keine Garantie.

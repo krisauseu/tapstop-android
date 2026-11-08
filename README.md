@@ -1,141 +1,146 @@
-# TapStop für Android
+# TapStop for Android
 
-TapStop ist eine systemweite Android-Spracheingabe: **Tap → sprechen → Tap → Text.**
-Die schwebende Overlay-Blase startet und stoppt die Aufnahme. Das fertige Diktat wird am Cursor in das fokussierte Eingabefeld einer anderen App eingefügt. Falls direkte Einfügung nicht möglich ist, steht der Text über den Clipboard-Fallback bereit.
+Language: English | [Deutsch](docs/i18n/README.de.md)
 
-## Vier Modi
+## 1. Project Overview
 
-- **Roh:** unverändertes STT-Transkript, ohne Rewrite-Aufruf.
-- **Plus:** korrigiert Rechtschreibung, Zeichensetzung und eindeutige Grammatikfehler und entfernt reine Zögerlaute. Wortwahl, Satzreihenfolge, persönlicher Ton und Aussagen sollen erhalten bleiben.
-- **Chat:** überarbeitet das Diktat zu einer natürlichen, lockeren Nachricht mit sparsamen passenden Emojis.
-- **Formal:** sachlicher Stil mit Absätzen, ohne Emojis.
+TapStop is system-wide Android dictation. **Tap → speak → tap → text.** A floating bubble starts and stops recording. TapStop inserts the result at the cursor in the focused editor of another app. If direct insertion fails, TapStop copies the result to the clipboard.
 
-Ein **480-ms-Long-Press** auf die Blase öffnet im Ruhezustand den Fächer mit den vier Modi. Antippen eines Modus speichert die Auswahl; Ziehen verschiebt die Blase. Die Auswahl bleibt nach Verarbeitung und Neustart bestehen.
+## 2. Features
 
-## Provider und Modelle
+- Movable accessibility overlay with a four-mode picker.
+- Independent speech-to-text (STT) and rewrite provider selection.
+- Personal dictionary, local usage statistics, and independently opt-in audio and text diagnostics.
+- Experimental on-device transcription on two validated Qualcomm targets in the full build, with a separate model import.
 
-| Provider | Sprache zu Text | Überarbeitung: Plus / Chat / Formal |
+## 3. Screenshots
+
+Planned screenshots cover the dashboard, provider settings, and the four-mode bubble. Public screenshots are pending.
+
+## 4. Speech-to-Text Providers
+
+| Provider | Speech to text | Rewrite in Plus, Chat, and Formal |
 | --- | --- | --- |
-| OpenAI | `whisper-1` | `gpt-4o-mini`, Temperatur 0,3 |
-| Groq | `whisper-large-v3` oder `whisper-large-v3-turbo` | `openai/gpt-oss-120b`, Temperatur 0,2 für Plus/Formal und 0,4 für Chat |
-| Google Gemini (manuell wählbar) | `gemini-3.5-transcribe`, wortgetreu mit Sprachhinweis `de-DE` | Separat auswählbarer OpenAI- oder Groq-Rewrite |
-| Lokal – Qualcomm NPU | Whisper Large V3 Turbo FP16, auf dem Gerät | Separat auswählbarer OpenAI- oder Groq-Rewrite |
+| OpenAI | `whisper-1` | `gpt-4o-mini`, temperature 0.3 |
+| Groq | `whisper-large-v3` or `whisper-large-v3-turbo` | `openai/gpt-oss-120b`, temperature 0.2 for Plus and Formal, 0.4 for Chat |
+| Google Gemini, selected manually | `gemini-3.5-transcribe`, verbatim with the `de-DE` language hint | OpenAI or Groq, selected separately |
+| Local, Qualcomm NPU | Whisper Large V3 Turbo FP16 on device | OpenAI or Groq, selected separately |
 
-STT und Textüberarbeitung lassen sich getrennt auswählen, zum Beispiel **Gemini + Groq-Rewrite**. Ohne eigene Rewrite-Auswahl bleibt bei OpenAI und Groq die bisherige Providerpaarung erhalten. Bei Gemini und Local verwendet die automatische Auswahl den zuletzt für STT gewählten OpenAI- oder Groq-Anbieter. Neue Profile beginnen mit OpenAI.
+STT and rewrite can be combined independently, for example Gemini transcription with Groq rewriting. Automatic rewrite follows the selected STT provider for OpenAI and Groq. For Gemini or Local, it uses the most recent OpenAI or Groq STT choice. New profiles start with OpenAI. TapStop fixes the STT provider when recording starts and reads mode and rewrite settings when recording stops.
 
-Die API-Keys werden für OpenAI, Groq und Gemini getrennt per Android Keystore AES-GCM geschützt und beim Providerwechsel erhalten. **Local benötigt keinen API-Key.** Audio liegt während der Verarbeitung im privaten Cache und wird danach gelöscht. Der STT-Provider wird beim Aufnahmestart festgelegt; Modus und Rewrite-Einstellungen werden am Aufnahmeende übernommen.
+Gemini sends the original M4A through the Google Interactions API with `store=false`. If the Base64-encoded request including JSON exceeds 20 MB, TapStop uploads the audio through the Files API and attempts to delete it after success, failure, or cancellation. A lost connection can prevent deletion. Google automatically deletes uploaded files after 48 hours. Gemini accepts recordings up to one hour. For Gemini dictation the personal dictionary is used during OpenAI or Groq rewriting. [Transcription](https://aistudio.google.com/docs/transcribe) · [Files API](https://aistudio.google.com/docs/files)
 
-**Local + Roh:** Spracherkennung und Textverarbeitung erfolgen vollständig auf dem Gerät; TapStop sendet weder Audio noch Transkript an einen Cloudprovider. **Local + Plus/Chat/Formal:** Die Spracherkennung bleibt lokal; das Transkript wird anschließend an den konfigurierten Cloudprovider zur Überarbeitung gesendet. Bei Cloud-STT wird die Aufnahme zum gewählten STT-Provider übertragen. Es gibt keinen automatischen Cloud-Fallback.
+## 5. Local Speech Recognition
 
-### Google Gemini
+The experimental Local provider uses the Qualcomm NPU. Select **Modellordner importieren** in settings and choose the model package for your target. The roughly 2.2 GB package is separate from the APK. The importer verifies the target, runtime versions, sizes, and hashes. Prepare the model before dictation and allow additional time for the first initialization. Local needs no API key.
 
-Gemini sendet die originale M4A-Datei über die Google Interactions API mit `store=false`. Überschreitet der Base64-kodierte Request inklusive JSON 20 MB, lädt TapStop die Datei über die Files API hoch und versucht, sie nach Abschluss, Fehler oder Abbruch zu löschen. Bei einem Verbindungsverlust kann die Löschung fehlschlagen. Google löscht Dateien nach 48 Stunden automatisch. Gemini akzeptiert Aufnahmen bis zu einer Stunde. Das persönliche Wörterbuch wirkt bei der Textüberarbeitung mit OpenAI oder Groq. [Transkription](https://aistudio.google.com/docs/transcribe), [Files API](https://aistudio.google.com/docs/files)
+- **Local + Roh (Raw)** keeps recognition and text processing on the device. TapStop sends neither audio nor transcript to a cloud provider.
+- **Local + Plus, Chat, or Formal** transcribes on device and sends the resulting text to the configured cloud rewrite provider.
 
-### Lokale Spracherkennung
+Local stops automatically after 30 seconds. Tap again to end a shorter recording. This cap applies only to Local. The source-only build hides the Local provider and its model importer. [Qualcomm backend and model import](docs/QUALCOMM_LOCAL_STT.md) · [Qualcomm license inventory](docs/QUALCOMM_LICENSING.md)
 
-Local unterstützt **maximal 30 Sekunden pro Diktat** und stoppt dann automatisch. Ein weiterer Tap beendet eine kürzere Aufnahme. Diese Grenze gilt ausschließlich für Local. Das etwa 2,2 GB große Modell wird separat importiert und ist nicht in der APK enthalten. Die Qualcomm-Runtime muss im verwendeten APK-Build enthalten sein; der normale Quellcode-Build benötigt keine proprietären SDK-Dateien.
+## 6. Text Processing Modes
 
-Lokale Diktate über 30 Sekunden per Chunking sind für eine spätere Version vorgesehen.
+- **Roh (Raw)** inserts the STT transcript without a rewrite request.
+- **Plus** corrects spelling, punctuation, and clear grammar errors and removes pure hesitation sounds. It aims to preserve word choice, sentence order, voice, and meaning.
+- **Chat** turns the dictation into a natural, informal message with occasional appropriate emoji.
+- **Formal** uses a factual style and paragraphs, without emoji.
 
-**Bekannte SDK-Grenze:** Bei bestimmten Aufnahmen nahe 30 Sekunden kann VoiceAI mit `SPECTROGRAM FAIL` scheitern. TapStop zeigt dann einen Fehler, fügt keinen Teiltext ein und startet keinen Cloud-Rewrite. Ein neues, kürzeres Diktat kann ohne erneutes Laden des Modells gestartet werden. Der automatische Stopp ist keine Garantie für eine erfolgreiche Erkennung jeder Aufnahme.
+Press and hold the idle bubble for **480 ms** to open the picker. Tap a mode to save it or drag the bubble to move it. Mode and position persist across app restarts.
 
-Aktuell sind zwei lokale Modelltargets in TapStop mit echten Mikrofon-Diktaten validiert:
+## 7. Installation
 
-| SoC/Target | Konkret getestetes Gerät |
-| --- | --- |
-| Snapdragon 8 Gen 3 · SM8650 · HTP V75 | Samsung Galaxy S24 Ultra |
-| Snapdragon 8 Gen 5 · SM8845 / SM8845P · HTP V81 | HONOR MagicPad 4 |
+TapStop requires Android 10 or later. The latest published APK and its release notes are listed on [GitHub Releases](https://github.com/krisauseu/tapstop-android/releases). The v0.12 full release candidate is named `TapStop-Android-0.12.apk`.
 
-TapStop erkennt den SoC automatisch. Andere Gerätemodelle mit einem bekannten passenden Target werden als **noch nicht am Gerät getestet** gekennzeichnet. Geräte ohne bekanntes Modelltarget sehen die deaktivierte Local-Option. Daraus folgt keine pauschale Unterstützung aller Snapdragon-Geräte. Die [Geräteabnahme](DEVICE_TESTS.md) dokumentiert Roh, Plus mit Groq, Einfügung, Statistik und HTP-Nachweise sowie die bekannte SDK-Grenze.
+Version 0.12 uses application ID and Kotlin namespace `de.kf.tapstop`, version code `12`, and a dedicated release certificate. Android installs it alongside `de.kf.blitztext` from v0.11. Keep the older installation while checking the new one. Later updates for `de.kf.tapstop` require a compatible signing identity and use the same app data area. See the [migration guide](RELEASING.md#package-migration-from-v011).
 
-Modellimport, lokale SDK-Builds, Grenzen und Erweiterung auf weitere SoCs: [Qualcomm-Backend](docs/QUALCOMM_LOCAL_STT.md). Herkunft und Weitergaberechte: [Lizenzinventar](docs/QUALCOMM_LICENSING.md).
+Version 0.11 moved the bubble and picker to `TYPE_ACCESSIBILITY_OVERLAY`. Version 0.10 added Gemini 3.5 Transcribe and separate STT and rewrite selection.
 
-## Nutzung
+## 8. Configuration
 
-1. APK als Update installieren und einen STT-Provider auswählen. Für OpenAI, Groq oder Gemini den passenden API-Key speichern; für Local das passende Modellpaket über **Modellordner importieren** auswählen.
-2. Bei Groq zwischen Whisper Large V3 und Large V3 Turbo wählen. Bei Local das Modell prüfen/vorbereiten; die erste Initialisierung benötigt zusätzliche Zeit. Für Plus/Chat/Formal einen Cloudprovider für die Textüberarbeitung konfigurieren.
-3. Mikrofonzugriff erlauben und **TapStop Texteingabe** unter Bedienungshilfen aktivieren. Die Bedienungshilfe stellt die Blase dar und ermöglicht direktes Einfügen.
-4. Die Overlay-Blase aus der sichtbaren App starten und in einer anderen App ein Textfeld fokussieren.
-5. Blase tippen, sprechen, erneut tippen. Während der Aufnahme wird die Blase rot, während der Verarbeitung blau.
+1. Select an STT provider in **Einstellungen**. Save the matching API key for OpenAI, Groq, or Gemini. For Local, import and prepare the matching model.
+2. Choose a Groq STT model if applicable. For Plus, Chat, or Formal, configure OpenAI or Groq for rewriting.
+3. Grant microphone access and enable **TapStop Texteingabe** in Android accessibility settings.
+4. Start the bubble from the visible TapStop app. Focus an editor in another app, tap the bubble, speak, and tap again. The bubble turns red while recording and blue while processing.
 
-Wird die Bedienungshilfe getrennt, verschwinden Blase und Fächer. Solange der Mikrofon-Dienst läuft, erscheint die Blase beim erneuten Verbinden wieder. Über **Blase beenden** lässt sich der Dienst in TapStop auch bei getrennter Bedienungshilfe stoppen. Nach einem Geräteneustart oder wenn Android den Mikrofon-Dienst beendet, die Blase aus der sichtbaren App erneut starten.
+The personal dictionary accepts one term or expression per line, up to 200 entries or 8 KiB. OpenAI and Groq STT use entries from the beginning of the list up to the prompt limit. With Gemini and Local, the dictionary is used during cloud rewriting. [Personal dictionary](docs/PERSONAL_DICTIONARY.md)
 
-## Version und Build
+For v0.12, reselect providers and modes, enter keys again, copy dictionary entries manually, and position the new bubble. Reimport models from the original model folder. The old statistics and private diagnostic files remain in the old app's storage.
 
-**0.11** (`versionCode=11`) stellt Blase und Modusfächer auf Androids `TYPE_ACCESSIBILITY_OVERLAY` um. Die separate Android-Berechtigung „Über anderen Apps anzeigen“ entfällt.
+## 9. Permissions and Accessibility
 
-**0.10** (`versionCode=10`) ergänzt Gemini 3.5 Transcribe. Die getrennte Auswahl von Spracherkennung und Rewrite erlaubt beispielsweise Gemini für STT und Groq für Plus, Chat oder Formal. Das [persönliche Wörterbuch](docs/PERSONAL_DICTIONARY.md) ergänzt die unterstützten Cloud-Pfade.
+TapStop uses microphone access, a microphone foreground service, vibration, network access, and notifications on supported Android versions. The accessibility service draws the bubble and mode picker, identifies the focused editor, and inserts text via InputConnection or an accessibility text action. The clipboard fallback covers editors where direct insertion fails. Since v0.11 the bubble uses the accessibility overlay permission path and needs no separate **Display over other apps** grant.
 
-Die installierbare APK steht im [GitHub-Release v0.11](https://github.com/krisauseu/tapstop-android/releases/tag/v0.11) bereit.
+If accessibility disconnects, the bubble and picker disappear. If the microphone service is still running, the bubble returns when accessibility reconnects. Use **Blase beenden** to stop the service even when accessibility is disconnected. After a reboot or after Android stops the microphone service, restart the bubble from the visible app.
 
-SDK 36 und JDK 17 sind erforderlich. Für den Build muss `JAVA_HOME` auf JDK 17 zeigen. Mit Android Studio öffnen oder ausführen:
+## 10. Privacy and Data Handling
 
-```sh
-./gradlew assembleDebug lint testDebugUnitTest packageTapStop
-```
+- OpenAI, Groq, and Gemini keys are stored separately using AES-GCM with Android Keystore and are retained when switching providers within one installation. Android isolates the old package's Keystore and private files from v0.12.
+- Cloud STT sends the recording to the selected provider. Cloud rewriting sends the transcript and applicable dictionary context. TapStop has no automatic cloud fallback.
+- Temporary audio lives in private cache and is deleted after processing. TapStop disables Android backup and explicitly excludes app data from cloud backup and device transfer on Android 12 and later.
+- **Temporäre Insert-Textdiagnose** captures transcripts, output, and later checks of inserted text. **Originalaudio für Diagnose speichern** retains input audio and associated text. Both switches are off on a fresh installation. With both off, TapStop writes no additional audio, text, or insertion diagnostics. Turning them off preserves existing files. Usage statistics run independently. These local diagnostics are available in release builds. ADB extraction via `run-as` requires a debuggable build. [Audio and STT](docs/AUDIO_STT_DIAGNOSTICS.md) · [Text and readbacks](docs/INSERT_DELAYED_DIAGNOSTICS.md) · [Insertion metadata](docs/INSERT_DIAGNOSTICS.md)
 
-Die Standardausgabe ist `app/build/outputs/apk/debug/app-debug.apk`; die benannte APK liegt unter **`app/build/outputs/apk/tapstop/TapStop-Android-0.11.apk`**. Sie wird weiterhin mit dem vorhandenen lokalen Debug-Schlüssel signiert. Für Updates auf eine bisherige Installation muss dieselbe Signatur verwendet werden; ein anderer Rechner hat üblicherweise einen anderen Debug-Schlüssel. Signaturschlüssel gehören nicht ins Repository.
+## 11. Usage Statistics
 
-Ein Build mit lokal bereitgestellter Qualcomm-Runtime verwendet zusätzlich `-PqualcommRuntimeDir=/path/to/local-runtime`. Struktur und Werkzeuge stehen in [tools/qualcomm-whisper](tools/qualcomm-whisper/README.md). Qualcomm-Dateien und Modellgewichte gehören nicht ins öffentliche Repository.
+TapStop opens the dashboard. **Today**, **Week** (Monday–Sunday), **Month**, and **All** use the device's local time zone. Wide screens show the four main metrics side by side. The all-time heatmap covers the last 53 weeks, and totals use the entire available history. Daily activity bands are 0, 1–99, 100–499, and at least 500 raw words.
 
-Die JVM-/Robolectric-Tests prüfen weiterhin Gesten, Modus-Fächer, Persistenz, Roh-Verarbeitung ohne Rewrite-Netzwerk sowie Request-Modelle, Temperaturen und exakte Prompttexte beider Cloudprovider. Hinzu kommen Targetzuordnung, Modellprüfung/Import, der lokale Runtime-Lifecycle, Providertrennung und Local-Statistik. Aktuelle und historische Geräteprüfungen stehen in [DEVICE_TESTS.md](DEVICE_TESTS.md) und [INSERT_DEVICE_TESTS.md](INSERT_DEVICE_TESTS.md). Die PoC-Abnahmen ersetzen keine Geräteabnahme der integrierten App.
+**Words** counts raw STT words. **Average WPM** divides total raw words by total recording minutes, including silence. Unicode letter and digit groups count as words, including internal hyphens and apostrophes. Punctuation and standalone emoji are excluded. Final word counts are also tracked and broken down by mode.
 
-## Lokale Diagnose
+Successful processing counts even if TapStop supplies the text through the clipboard fallback. TapStop cannot measure a later manual paste. The success flag tracks processing, and target-app acceptance is measured separately where possible. The Android monotonic clock measures STT around the transcription call, rewrite around the rewrite call, and total latency from recording stop to final text. Failed attempts store only available metrics, with incomplete steps set to `NULL`. They are excluded from usage totals and latency medians.
 
-Unter **Einstellungen** lassen sich **Temporäre Insert-Textdiagnose** und **Originalaudio für Diagnose speichern** unabhängig ein- und ausschalten. Die Textdiagnose erfasst Transkript, Ausgabe und Nachkontrollen des eingefügten Texts. Die Audiodiagnose sichert die Originaldatei und die zugehörigen Texte. Bei beiden ausgeschalteten Schaltern schreibt TapStop keine zusätzlichen Audio-, Text- oder Einfügediagnosedateien. Bereits gespeicherte Fälle bleiben erhalten. Die reguläre Nutzungsstatistik läuft weiter.
+The provider/model comparison reports **× real time** as the sum of recording durations divided by the sum of STT durations for successful dictations with positive values in both fields. For example, 30 seconds of audio and 1 second of STT yield 30×. A dash indicates no measurable data. Absolute STT time remains visible as a median. Local is listed separately as **Qualcomm NPU / Whisper Large V3 Turbo** (`qualcomm` / `whisper-large-v3-turbo`). Model preparation time is excluded from STT latency.
 
-Die Diagnosefunktionen sind in der veröffentlichten, kompatibel debug-signierten APK verfügbar. Speicherorte und lokale Auswertung sind für [Audio und STT](docs/AUDIO_STT_DIAGNOSTICS.md), [Text und Nachkontrollen](docs/INSERT_DELAYED_DIAGNOSTICS.md) und [Einfügemetadaten](docs/INSERT_DIAGNOSTICS.md) dokumentiert.
+The private SQLite database `usage.db` uses schema version 1, table `dictations`, and index `dictations_timestamp(timestamp)`.
 
-## Update- und Datenkompatibilität
-
-Die sichtbare App heißt TapStop. Technische Identitäten bleiben bewusst erhalten:
-
-- `applicationId` und Kotlin-Namespace: `de.kf.blitztext`.
-- Accessibility-Komponente: `de.kf.blitztext/de.kf.blitztext.TextInsertService`.
-- SharedPreferences: `settings`, einschließlich der bisherigen Schlüssel für Provider, Modi, Blasenposition und API-Keys.
-- Android-Keystore-Alias: `blitztext_api_key`.
-- SQLite: `usage.db`, Schema Version 1; der gespeicherte Moduswert `BLITZTEXT` bezeichnet weiterhin den sichtbaren Modus **Roh**.
-- Benachrichtigungskanal-ID: `blitztext`; dessen sichtbarer Name lautet **TapStop-Blase**.
-
-Es gibt keine Package- oder Datenmigration und keine absichtliche Löschung von Einstellungen, API-Keys oder Statistiken. Ein Update mit gleicher Application-ID und Signatur erhält den privaten App-Datenbereich. Die App nicht deinstallieren und ihre Daten nicht löschen.
-
-## Inspiration und Lizenzhinweis
-
-TapStop wurde ursprünglich von Christoph Magnussens quelloffener macOS-App Blitztext inspiriert und ist eine eigenständige Android-Implementierung. Der vorhandene MIT-Lizenztext zur ursprünglichen macOS-Vorlage bleibt in [THIRD_PARTY_LICENSE_BLITZTEXT_MAC.txt](THIRD_PARTY_LICENSE_BLITZTEXT_MAC.txt) erhalten. Die Umbenennung verändert die bestehenden Lizenzhinweise nicht.
-
-## Lokale Statistiken (ab 0.3)
-
-Die App startet im Dashboard. Die bisherigen Funktionen sind unter **Einstellungen** unverändert erreichbar. Heute, Woche (Montag–Sonntag), aktueller Kalendermonat und Gesamt werden anhand der lokalen Gerätezeitzone gefiltert. Auf breiten Displays stehen alle vier Hauptkennzahlen nebeneinander. Die Gesamt-Heatmap zeigt die letzten 53 Wochen; Gesamtzahlen berücksichtigen die gesamte gespeicherte Historie. Die Aktivitätsstufen sind 0, 1–99, 100–499 und mindestens 500 Rohwörter pro Tag.
-
-**Wörter** meint STT-Rohwörter; **Ø WPM** ist die Summe der Rohwörter geteilt durch die gesamte Aufnahmedauer in Minuten (gewichtet, keine Stillebereinigung). Die lokale Unicode-Wortzählung zählt Buchstaben-/Zifferngruppen; interne Bindestriche und Apostrophe bleiben Teil eines Wortes. Satzzeichen und alleinstehende Emojis zählen nicht als Wörter. Finale Wortzahlen werden zusätzlich und ab 0.6 für jeden Modus separat gezeigt.
-
-Eine erfolgreiche Verarbeitung zählt auch dann, wenn das Ergebnis über den bestehenden Clipboard-Fallback bereitgestellt wird. Das spätere manuelle Einfügen ist nicht messbar. Erfolgsstatus bezeichnet die Verarbeitung, nicht eine bestätigte Übernahme durch die Ziel-App. Latenzen werden mit Androids monotoner Uhr gemessen: STT um den Transkriptionsaufruf, Rewrite um die Überarbeitung und Gesamt vom Stoppen der Aufnahme bis zum fertigen Text. Fehlgeschlagene Verarbeitungen speichern nur bereits tatsächlich ermittelte Werte; unvollständige Schritte bleiben `NULL`. Fehlversuche sind von Nutzungszahlen und Latenzmedianen ausgeschlossen.
-
-Ab 0.4 zeigt der Provider-/Modellvergleich zusätzlich **× Echtzeit**: Summe `recording_ms` / Summe `stt_ms` im gewählten Zeitraum, kein Mittelwert einzelner Faktoren. Nur erfolgreiche Diktate mit positiven Aufnahme- und STT-Zeiten gehen in beide Summen ein; ohne messbare Zeiten erscheint ein Strich. 30 Sekunden Audio bei 1 Sekunde STT ergeben 30× Echtzeit. Die absolute **STT-Zeit** bleibt als Median sichtbar. Vorhandene Statistiken aus 0.3 werden ohne Migration weiterverwendet.
-
-Local erscheint separat als **Qualcomm NPU / Whisper Large V3 Turbo**. Die bestehenden Felder speichern `provider=qualcomm`, `model=whisper-large-v3-turbo`, Modus sowie Aufnahme-, STT-, Rewrite- und Gesamtzeit. Die vorbereitende Modellinitialisierung gehört nicht zur STT-Latenz. Das Datenbankschema bleibt unverändert.
-
-Speicherung: privates SQLite `usage.db`, Schema Version 1, Tabelle `dictations`:
-
-| Spalte | Typ / Bedeutung |
+| Column | Type and meaning |
 | --- | --- |
 | `id` | INTEGER PRIMARY KEY AUTOINCREMENT |
-| `timestamp` | INTEGER, Unix-Millisekunden am Aufnahmeende |
-| `recording_ms` | INTEGER, tatsächliche Aufnahmedauer |
+| `timestamp` | INTEGER, Unix milliseconds at the end of recording |
+| `recording_ms` | INTEGER, actual recording duration |
 | `raw_words`, `final_words` | INTEGER, nullable |
-| `provider`, `model`, `mode` | TEXT, tatsächlich verwendete STT-Konfiguration und Modus |
-| `target_package` | TEXT, nullable = Unbekannt |
+| `provider`, `model`, `mode` | TEXT, actual STT configuration and mode |
+| `target_package` | TEXT, nullable when unknown |
 | `stt_ms`, `rewrite_ms`, `total_ms` | INTEGER, nullable |
-| `success` | INTEGER, 0 oder 1 |
+| `success` | INTEGER, 0 or 1 |
 
-Index: `dictations_timestamp(timestamp)`. SQLite läuft auf Hintergrundthreads. Die Statistik benötigt keine zusätzliche Berechtigung, Cloud-Anbindung oder Telemetrie. Das Ziel-Package wird ausschließlich vom bereits für die Einfügung gewählten Accessibility-Knoten gelesen; die Einfügelogik bleibt unberührt. App-Namen werden soweit sichtbar mit PackageManager aufgelöst, sonst wird das Package angezeigt. Eine Launcher-Intent-Abfrage erlaubt die Namensauflösung gewöhnlicher startbarer Apps, ohne `QUERY_ALL_PACKAGES` oder zusätzliche Berechtigung. Es wird keine Liste installierter Apps gespeichert. `allowBackup=false` gilt weiterhin; Android-12+-Datenextraktionsregeln schließen Cloud-Backups und Geräteübertragungen explizit aus. API-Keys und Einstellungen bleiben in den bestehenden Preferences/Keystore-Einträgen. Statistiken zurücksetzen löscht nach Bestätigung ausschließlich die Statistikzeilen.
+SQLite work runs on background threads. Statistics use no additional permission, network connection, or telemetry. The target package comes from the accessibility node selected for insertion. PackageManager resolves labels for visible apps via a launcher intent query, with the package ID as fallback. TapStop neither requests `QUERY_ALL_PACKAGES` nor stores an app inventory. Resetting statistics deletes only statistic rows after confirmation.
 
-## Automatisierter Gerätetest
+## 12. Building from Source
 
-`assembleDebugAndroidTest` erzeugt eine separate Test-APK ohne zusätzliche Testbibliothek. Nach Installation beider APKs:
+Use JDK 17 (`JAVA_HOME`), Android SDK Platform 36, and the checked-in Gradle wrapper. Open the project in Android Studio or run:
 
 ```sh
-python3 scripts/device-tests.py
+./gradlew :app:assembleDebug :app:lint :app:testDebugUnitTest :app:assembleDebugAndroidTest
 ```
 
-Die Testdaten liegen in `instrumentation-usage.db`, werden anschließend entfernt und berühren die echten Statistiken nicht. Geprüft werden Wortzählung, Mediane, gewichtete WPM, Fehler mit Teilmetriken, Zeitraumgrenzen, Datenbankschema, Persistenz, Reset sowie native InputConnection-Fälle und Clipboard-Fallback. Das Skript verbindet den bereits aktivierten Dienst nach dem Prozessneustart des Test-Runners erneut und erhält dabei die ursprüngliche Liste aller aktivierten Dienste. Der Test benötigt die aktivierte TapStop-Bedienungshilfe und einen bereits konfigurierten Provider. Für echte Mikrofon-/Provider-Tests weiterhin zwei Diktate in Roh und Plus durchführen. Ein einzelnes modernes Testgerät ersetzt keinen Lauf auf Android 10–12.
+The default build uses free source and dependencies, supports all three cloud providers, and produces `app/build/outputs/apk/debug/app-debug.apk`. For the full build, pass `-PqualcommRuntimeDir=/absolute/path/to/runtime` with the pinned VoiceAI and QAIRT bundle. `packageTapStop` builds the signed full release with external credentials. [Release and signing procedure](RELEASING.md) · [Qualcomm staging tools](tools/qualcomm-whisper/README.md)
+
+JVM and Robolectric cover gestures, the mode picker, persistence, Raw without rewrite, request models, temperatures, exact prompts, model import and target mapping, runtime lifecycle, provider separation, and Local statistics. Separate device instrumentation uses a disposable database and tests word counting, medians, weighted WPM, failure metrics, period boundaries, schema, persistence, reset, native InputConnection, and clipboard fallback. The runner rebinds the enabled TapStop accessibility service and preserves other enabled services. [Device tests](DEVICE_TESTS.md) · [Insertion tests](INSERT_DEVICE_TESTS.md) · [Running instrumentation](RELEASING.md#device-tests)
+
+## 13. Device Compatibility
+
+The historical device acceptance used actual microphone dictation on these Qualcomm targets.
+
+| SoC and HTP target | Tested device |
+| --- | --- |
+| Snapdragon 8 Gen 3 · SM8650 · HTP V75 | Samsung Galaxy S24 Ultra (SM-S928B) |
+| Snapdragon 8 Gen 5 · SM8845 / SM8845P · HTP V81 | HONOR MagicPad 4 (YLE-W09) |
+
+TapStop detects the SoC automatically. Other devices with a matching target are marked as untested. The full build disables Local on unknown targets. The device records cover Raw, Plus with Groq, insertion, statistics, and HTP execution evidence. Research app results and testing on recent devices leave separate acceptance work for the integrated build and for Android 10–12. [Device acceptance records](DEVICE_TESTS.md)
+
+## 14. Known Limitations
+
+- Local is limited to the listed validated devices and targets. General Snapdragon support has yet to be established. Dictation over 30 seconds through chunking is a future development item.
+- Some recordings near 30 seconds fail with VoiceAI `SPECTROGRAM FAIL`. TapStop reports an error, inserts no partial text, and skips cloud rewriting. A shorter retry can reuse the loaded model.
+- Release 0.12 starts with a separate Android data area. Cloud keys, stats, models, and accessibility authorization require separate handling.
+- The free build is intended for future F-Droid review and requires a user-supplied account or key for external STT services. [F-Droid considerations](RELEASING.md#future-f-droid-integration)
+
+## 15. Contributing
+
+Include the build variant, Android version, and reproduction steps in reports. Keep keys, recordings, transcripts, private diagnostics, SDK binaries, and model files out of commits and issues. For new Qualcomm targets, include on-device encoder and decoder execution evidence. Update this English README and its German translation together.
+
+## 16. License and Third-Party Notices
+
+The project license text for TapStop's own source is Apache License 2.0. See the release checklist for confirmation of rights before public distribution. TapStop is an independent Android implementation inspired by Christoph Magnussen's open-source macOS app Blitztext. Its MIT attribution is preserved. AndroidX and other dependencies retain their respective licenses. [Apache License 2.0](LICENSE) · [Blitztext MIT notice](THIRD_PARTY_LICENSE_BLITZTEXT_MAC.txt)
+
+The full APK includes proprietary Qualcomm VoiceAI and QAIRT object code under the applicable SDK terms, together with the unchanged notices. Model weights and target-specific compiled packages have separate terms and are imported independently. The repository contains the integration code and tools. [Qualcomm license inventory](docs/QUALCOMM_LICENSING.md)

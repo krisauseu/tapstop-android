@@ -29,7 +29,7 @@ const call = (method, params = {}) => new Promise((resolve, reject) => {
 });
 const evaluate = async expression => (await call('Runtime.evaluate', {expression, returnByValue: true})).result.value;
 const original = adb('shell', 'settings', 'get', 'secure', 'enabled_accessibility_services');
-const service = 'de.kf.blitztext/de.kf.blitztext.TextInsertService';
+const service = 'de.kf.tapstop/de.kf.tapstop.TextInsertService';
 if (!original.split(':').includes(service)) throw Error('TapStop accessibility must already be enabled');
 const without = original.split(':').filter(x => x !== service && x !== 'null').join(':');
 let success = false;
@@ -47,7 +47,7 @@ try {
   let rebound = false;
   const output = await new Promise((resolve, reject) => {
     inventory();
-    const p = spawn('adb', ['-s', serial, 'shell', 'am', 'instrument', '-w', '-e', 'delayedDiagnostics', 'true', 'de.kf.blitztext.test/de.kf.blitztext.StatsInstrumentation']);
+    const p = spawn('adb', ['-s', serial, 'shell', 'am', 'instrument', '-w', '-e', 'delayedDiagnostics', 'true', 'de.kf.tapstop.test/de.kf.tapstop.StatsInstrumentation']);
     let out = '';
     p.stdout.on('data', chunk => {
       out += chunk;

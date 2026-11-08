@@ -8,7 +8,7 @@ from pathlib import Path
 import statistics
 import subprocess
 
-PACKAGE = 'de.kf.blitztext'
+PACKAGE = 'de.kf.tapstop'
 DEVICE_FILE = 'no_backup/insert-diagnostics.jsonl'
 IC_OUTCOMES = {'DIRECT_INPUT_CONNECTION_SUCCESS', 'DIRECT_INPUT_CONNECTION_ACCEPTED_UNVERIFIED'}
 

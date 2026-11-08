@@ -58,8 +58,8 @@ def verify(text, htp, pid=None):
             ready = next((m for m in reversed(readiness) if m), None)
             skeleton = f"libQnnHtpV{htp}Skel.so"
             app_skeleton = bool(re.search(
-                r"Successfully opened file (?:/storage/emulated/\d+/Android/data/de\.kf\.blitztext/files|"
-                r"/data/(?:user/\d+|data)/de\.kf\.blitztext/files)/qualcomm-runtime/"
+                r"Successfully opened file (?:/storage/emulated/\d+/Android/data/de\.kf\.(?:tapstop|blitztext)/files|"
+                r"/data/(?:user/\d+|data)/de\.kf\.(?:tapstop|blitztext)/files)/qualcomm-runtime/"
                 + re.escape(f"2.50.0.260828/v{htp}/") + r"(?:\./)?" + re.escape(skeleton) + r"(?:\s|$)", prefix))
             handles = set(re.findall(
                 r"remote_handle64_open: opened handle (0x[0-9a-f]+).*" + re.escape(skeleton)

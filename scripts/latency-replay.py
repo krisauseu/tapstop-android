@@ -17,7 +17,7 @@ parser.add_argument('--output', default='diagnostics/replay')
 args = parser.parse_args()
 out = Path(args.output)
 out.mkdir(parents=True, exist_ok=True)
-package = 'de.kf.blitztext'
+package = 'de.kf.tapstop'
 def adb(*words):
     return subprocess.run(['adb', *words], capture_output=True, text=True, timeout=20).stdout.strip()
 
@@ -46,7 +46,7 @@ with (out / 'logcat.txt').open('w') as log:
     try:
         result = subprocess.run(['adb', 'shell', 'am', 'instrument', '-w', '-e', 'latencyReplay', 'true',
             '-e', 'faultReplay', str(args.faults).lower(), '-e', 'settleMs', str(args.settle_ms), '-e', 'rawCount', str(args.raw), '-e', 'plusCount', str(args.plus), '-e', 'provider', args.provider,
-            package + '.test/de.kf.blitztext.StatsInstrumentation'], capture_output=True, text=True)
+            package + '.test/de.kf.tapstop.StatsInstrumentation'], capture_output=True, text=True)
         (out / 'results.txt').write_text(result.stdout + result.stderr)
         print(result.stdout)
         failed = result.returncode != 0 or 'FAILED' in result.stdout or 'PASS replay' not in result.stdout

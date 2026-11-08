@@ -34,7 +34,7 @@ Es werden keine Diktattexte, Editor-/Clipboard-Texte, Audio, Schlüssel, Wörter
 
 ## Speicherung und Grenzen
 
-Nur in Debug-Builds und solange mindestens einer der beiden Diagnoseschalter aktiv ist. Private Datei: `/data/user/0/de.kf.blitztext/no_backup/insert-diagnostics.jsonl`; getrennt von Statistik und Preferences. AtomicFile verhindert teilweise ersetzte Dateien. Ein einzelner Hintergrundwriter arbeitet erst nach der Ergebnisentscheidung; Fehler können keinen erfolgreichen Insert in einen Fallback verwandeln.
+Seit v0.12 auch in Release-Builds, solange mindestens einer der beiden Diagnoseschalter aktiv ist. Private Datei: `/data/user/0/de.kf.tapstop/no_backup/insert-diagnostics.jsonl`; getrennt von Statistik und Preferences. AtomicFile verhindert teilweise ersetzte Dateien. Ein einzelner Hintergrundwriter arbeitet erst nach der Ergebnisentscheidung; Fehler können keinen erfolgreichen Insert in einen Fallback verwandeln.
 
 Maximal **1.024 Datensätze und 1 MiB** in der fertigen Datei. Beim nächsten Schreiben werden Datensätze über sieben Tagen entfernt; bei ruhender App gibt es keine zeitgesteuerte Löschung. Während des atomaren Schreibens kann zusätzlich eine temporäre Kopie von bis zu 1 MiB bestehen. Maximal 64 ausstehende Schreibaufträge; Überlast verwirft nur Diagnosedaten (`TapStopInsertDiag: queue_full_record_dropped`). Speicherfehler werden ausschließlich als `storage_failed` ohne Inhalte gemeldet. Ein abrupt beendeter Prozess kann noch ausstehende Einträge verlieren. Erfolgreich geschriebene Einträge überstehen den Prozessneustart.
 
@@ -59,5 +59,6 @@ python3 scripts/insert-diagnostics.py --file diagnostics/insert-diagnostics.json
 Nur Rohdaten lesen:
 
 ```sh
-adb exec-out run-as de.kf.blitztext cat no_backup/insert-diagnostics.jsonl
+# Nur mit debuggable Test-APK (run-as).
+adb exec-out run-as de.kf.tapstop cat no_backup/insert-diagnostics.jsonl
 ```

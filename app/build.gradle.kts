@@ -1,5 +1,6 @@
 import groovy.json.JsonSlurper
 import java.security.MessageDigest
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -9,22 +10,62 @@ plugins {
 
 // Optional, locally licensed SDK bundle. The public source tree contains no SDK binaries.
 val qualcommRuntimeDir = providers.gradleProperty("qualcommRuntimeDir").orNull?.let { file(it) }
+val releaseSigning = providers.environmentVariable("TAPSTOP_SIGNING_PROPERTIES").orNull?.let { path ->
+    val propertiesFile = rootProject.file(path)
+    Properties().apply {
+        propertiesFile.inputStream().use { load(it) }
+        for (key in listOf("storeFile", "storePassword", "keyAlias", "keyPassword")) {
+            check(!getProperty(key).isNullOrBlank()) { "Missing release signing setting: $key" }
+        }
+        check(File(getProperty("storeFile")).isAbsolute) { "Release storeFile must be absolute" }
+    }
+}
+
+fun sha256(file: File): String {
+    val hash = MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+        val buffer = ByteArray(1024 * 1024)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            hash.update(buffer, 0, count)
+        }
+    }
+    return hash.digest().joinToString("") { "%02x".format(it) }
+}
 
 android {
-    namespace = "de.kf.blitztext"
+    namespace = "de.kf.tapstop"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "de.kf.blitztext"
+        applicationId = "de.kf.tapstop"
         minSdk = 29
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.11"
-        testInstrumentationRunner = "de.kf.blitztext.StatsInstrumentation"
+        versionCode = 12
+        versionName = "0.12"
+        testInstrumentationRunner = "de.kf.tapstop.StatsInstrumentation"
+        buildConfigField("boolean", "QUALCOMM_RUNTIME_INCLUDED", (qualcommRuntimeDir != null).toString())
+        buildConfigField("boolean", "LOCAL_DIAGNOSTICS", "true")
     }
 
+    releaseSigning?.let { properties ->
+        signingConfigs.create("release") {
+            storeFile = File(properties.getProperty("storeFile"))
+            storePassword = properties.getProperty("storePassword")
+            keyAlias = properties.getProperty("keyAlias")
+            keyPassword = properties.getProperty("keyPassword")
+        }
+    }
     buildTypes {
-        release { isMinifyEnabled = false }
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
+        }
+    }
+    if (providers.gradleProperty("releaseDeviceTests").orNull == "true") {
+        check(releaseSigning != null) { "Release device tests require TAPSTOP_SIGNING_PROPERTIES" }
+        testBuildType = "release"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -34,6 +75,10 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     testOptions { unitTests.isIncludeAndroidResources = true }
     packaging {
+        resources {
+            merges += "META-INF/LICENSE*"
+            merges += "META-INF/NOTICE*"
+        }
         jniLibs {
             useLegacyPackaging = true
             keepDebugSymbols += "**/*.so"
@@ -45,7 +90,14 @@ android {
             assets.srcDir(runtime.resolve("assets"))
         }
     }
+    sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/releaseNotices"))
 }
+
+val stageProjectNotices = tasks.register<Copy>("stageProjectNotices") {
+    from(rootProject.file("LICENSE"), rootProject.file("THIRD_PARTY_LICENSE_BLITZTEXT_MAC.txt"))
+    into(layout.buildDirectory.dir("generated/releaseNotices/notices"))
+}
+tasks.named("preBuild") { dependsOn(stageProjectNotices) }
 
 dependencies {
     qualcommRuntimeDir?.let { implementation(fileTree(it.resolve("libs")) { include("*.jar") }) }
@@ -64,37 +116,42 @@ qualcommRuntimeDir?.let { runtime ->
         doLast {
             @Suppress("UNCHECKED_CAST")
             val pins = JsonSlurper().parse(rootProject.file("tools/qualcomm-whisper/runtime-files.json")) as Map<String, Map<String, Any>>
+            val expectedFiles = mutableSetOf("assets/qualcomm/runtime-manifest.json")
             for ((name, pin) in pins) {
                 val relative = when {
                     name.endsWith(".jar") -> "libs/$name"
                     name.contains("Skel") -> "assets/qualcomm/$name"
                     else -> "jniLibs/arm64-v8a/$name"
                 }
+                expectedFiles += relative
                 val binary = runtime.resolve(relative)
                 check(binary.isFile && binary.length() == (pin.getValue("bytes") as Number).toLong()) { "Missing or invalid Qualcomm artifact: $relative" }
-                val hash = MessageDigest.getInstance("SHA-256")
-                binary.inputStream().use { input ->
-                    val buffer = ByteArray(1024 * 1024)
-                    while (true) { val n = input.read(buffer); if (n < 0) break; hash.update(buffer, 0, n) }
-                }
-                check(hash.digest().joinToString("") { "%02x".format(it) } == pin["sha256"]) { "Qualcomm artifact SHA-256 mismatch: $relative" }
+                check(sha256(binary) == pin["sha256"]) { "Qualcomm artifact SHA-256 mismatch: $relative" }
             }
-            val binaries = listOf("libs", "jniLibs", "assets/qualcomm").flatMap { folder ->
-                runtime.resolve(folder).walkTopDown().filter { it.isFile && it.extension in setOf("jar", "so") }.toList()
+            val notices = JsonSlurper().parse(rootProject.file("tools/qualcomm-whisper/runtime-notices.json")) as Map<*, *>
+            for ((name, hash) in notices) {
+                val relative = "assets/notices/$name"
+                expectedFiles += relative
+                val notice = runtime.resolve(relative)
+                check(notice.isFile && sha256(notice) == hash) { "Missing or altered Qualcomm notice: $relative" }
             }
-            check(binaries.map { it.name }.toSet() == pins.keys) { "Unexpected Qualcomm binaries in runtime bundle" }
-            for (notice in listOf("VoiceAI-AI-Stack-License.pdf", "VoiceAI-LICENSE.txt", "VoiceAI-NOTICE.txt", "QAIRT-LICENSE.pdf", "QAIRT-NOTICE.txt", "QNN-NOTICE.txt")) {
-                check(runtime.resolve("assets/notices/$notice").isFile) { "Missing Qualcomm license/notice: $notice" }
-            }
+            val files = runtime.walkTopDown().filter { it.isFile }.map { it.relativeTo(runtime).invariantSeparatorsPath }.toSet()
+            check(files == expectedFiles) { "Unexpected or missing files in Qualcomm runtime bundle" }
         }
     }
     tasks.named("preBuild") { dependsOn(verifyRuntime) }
 }
 
-// Keep the existing debug signing identity for compatible updates.
+val checkFullRelease = tasks.register("checkFullRelease") {
+    doLast {
+        check(qualcommRuntimeDir != null) { "The full release requires -PqualcommRuntimeDir" }
+        check(releaseSigning != null) { "The full release requires TAPSTOP_SIGNING_PROPERTIES" }
+    }
+}
+
 tasks.register<Copy>("packageTapStop") {
-    dependsOn("assembleDebug")
-    from(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
+    dependsOn(checkFullRelease, "assembleRelease")
+    from(layout.buildDirectory.file("outputs/apk/release/app-release.apk"))
     into(layout.buildDirectory.dir("outputs/apk/tapstop"))
     rename { "TapStop-Android-${android.defaultConfig.versionName}.apk" }
 }

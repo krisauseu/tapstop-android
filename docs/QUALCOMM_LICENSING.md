@@ -21,6 +21,12 @@ unterscheiden. Die Erlaubnis gilt unter den übrigen Vertragsbedingungen,
 einschließlich der unveränderten Copyright-/Drittlizenzhinweise; sie ist keine
 Open-Source-Lizenz für diese Laufzeitdateien.
 
+Vor einer öffentlichen APK-Freigabe muss der veröffentlichende Lizenznehmer
+auch die übrigen Bedingungen für die konkrete Distribution prüfen. Dazu
+gehören die Nutzungsbeschränkungen in Abschnitt 2, Exportkontrolle und
+Sanktionen sowie die unveränderten Drittanbieterhinweise. Siehe
+[Release-Ablauf](../RELEASING.md).
+
 ## Tatsächlich geprüfte Lizenzquellen
 
 | Quelle innerhalb der offiziellen Distribution | SHA-256 | Befund |
@@ -103,6 +109,9 @@ Native Bibliotheken werden nicht gestript, damit die geprüften Hashes erhalten
 bleiben. Nicht benötigte SDK-Tools, Header, Beispiele und andere Backends werden
 nicht mitgepackt. Ein gegebenenfalls später veröffentlichter APK-Build muss sein
 konkretes Inventar erneut gegen diese Liste prüfen.
+
+Seit v0.12 verwenden Staging und Gradle dieselben
+[Notice-Hashes](../tools/qualcomm-whisper/runtime-notices.json).
 
 ## Öffentliche Primärquellen
 

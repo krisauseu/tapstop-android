@@ -12,7 +12,7 @@ ws.onmessage=e=>{let m=JSON.parse(e.data); if(m.id){pending.get(m.id)?.(m);pendi
 const call=(method,params={})=>new Promise((resolve,reject)=>{const n=++id;pending.set(n,m=>m.error?reject(m.error):resolve(m.result));ws.send(JSON.stringify({id:n,method,params}))});
 const evaluate=async expression=>(await call('Runtime.evaluate',{expression,returnByValue:true})).result.value;
 const original=adb('shell','settings','get','secure','enabled_accessibility_services');
-const service='de.kf.blitztext/de.kf.blitztext.TextInsertService';
+const service='de.kf.tapstop/de.kf.tapstop.TextInsertService';
 const without=original.split(':').filter(x=>x!==service&&x!=='null').join(':');
 const enabled=[without,service].filter(Boolean).join(':');
 const cases=[
@@ -35,7 +35,7 @@ try {
   await evaluate(`(()=>{let f=document.querySelector('#field');if(f.isContentEditable){f.textContent=${JSON.stringify(old)};f.focus();let r=document.createRange();r.setStart(f.firstChild,${start});r.setEnd(f.firstChild,${end});let s=getSelection();s.removeAllRanges();s.addRange(r)}else{f.value=${JSON.stringify(old)};f.focus();f.setSelectionRange(${start},${end})}return true})()`);
   await sleep(300);
   const output=await new Promise((resolve,reject)=>{
-   const p=spawn('adb',['shell','am','instrument','-w','-e','browserInput','true','-e','accessibilityOnly',String(fallback),'de.kf.blitztext.test/de.kf.blitztext.StatsInstrumentation']);
+   const p=spawn('adb',['shell','am','instrument','-w','-e','browserInput','true','-e','accessibilityOnly',String(fallback),'de.kf.tapstop.test/de.kf.tapstop.StatsInstrumentation']);
    let out='',connected=false;
    p.stdout.on('data',d=>{out+=d;if(!connected&&out.includes('READY_ACCESSIBILITY')){connected=true;adb('shell','settings','put','secure','enabled_accessibility_services',without||'null');adb('shell','settings','put','secure','enabled_accessibility_services',enabled)}});
    p.stderr.on('data',d=>out+=d); p.on('close',()=>resolve(out));p.on('error',reject);

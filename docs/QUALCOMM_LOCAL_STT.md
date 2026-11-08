@@ -159,7 +159,7 @@ Diese Erhaltung hat einen Speicherpreis: Eine Reparatur benötigt Platz für ein
 
 ## Optionaler SDK-Build und Lizenzen
 
-Der öffentliche Quellcode baut ohne Qualcomm-Binaries. Auf kompatibler Hardware erklärt die UI dann, dass die APK keine lokale Runtime enthält. Für einen lokal lizenzierten SDK-Build wird ein zusätzliches Verzeichnis bereitgestellt:
+Der öffentliche Quellcode baut ohne Qualcomm-Binaries. Seit v0.12 blendet der freie Build ohne Runtime die lokale Provider-Auswahl und den Modellimport aus. Für einen lokal lizenzierten SDK-Build wird ein zusätzliches Verzeichnis bereitgestellt:
 
 ```text
 <runtime-bundle>/
@@ -173,10 +173,12 @@ Der öffentliche Quellcode baut ohne Qualcomm-Binaries. Auf kompatibler Hardware
 
 ```sh
 ./gradlew -PqualcommRuntimeDir=/path/to/local-runtime \
-  assembleDebug assembleDebugAndroidTest testDebugUnitTest lint packageTapStop
+  assembleDebug assembleDebugAndroidTest testDebugUnitTest lint
 ```
 
 `stage-runtime.py` übernimmt ausschließlich die gepinnten, benötigten Dateien und zugehörigen Notices aus lokal vorhandenen validierten SDK-/PoC-Beständen. Für Aufbau, Lizenzquellen, Dateiauswahl und Parameter siehe [Werkzeuge](../tools/qualcomm-whisper/README.md) und [Lizenzinventar](QUALCOMM_LICENSING.md). Bibliotheken, Skeletons, SDK-ZIPs und Modelle werden nicht in Git aufgenommen. Eine lokal erzeugte APK ist keine pauschale Erlaubnis zur öffentlichen Weitergabe aller enthaltenen Artefakte.
+
+Der signierte vollständige Release-Build steht in [RELEASING.md](../RELEASING.md).
 
 Die Modellgewichte, ONNX External Data, DLCs und finalen QNN-Contexts bleiben außerhalb des öffentlichen Repositorys. Insbesondere wird das eigene SM8845-Paket nicht allein aufgrund seines erfolgreichen Builds veröffentlicht. Herkunft und Rechte von OpenAI-Gewichten, Qualcomm-Anpassungen, Tokenizer, Runtime und abgeleiteten Contexts werden getrennt im Lizenzinventar behandelt.
 

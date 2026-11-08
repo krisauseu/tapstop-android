@@ -12,7 +12,7 @@ from pathlib import Path
 import subprocess
 import tarfile
 
-PACKAGE = 'de.kf.blitztext'
+PACKAGE = 'de.kf.tapstop'
 DIRECTORY = 'no_backup/insert-delayed-diagnostics'
 
 

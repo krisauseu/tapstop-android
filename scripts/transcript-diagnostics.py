@@ -25,7 +25,7 @@ def main():
     else:
         if not args.serial:
             parser.error('--serial is required when reading from a device')
-        result = subprocess.run(['adb', '-s', args.serial, 'exec-out', 'run-as', 'de.kf.blitztext',
+        result = subprocess.run(['adb', '-s', args.serial, 'exec-out', 'run-as', 'de.kf.tapstop',
                                  'tar', '-cf', '-', 'no_backup/transcript-diagnostics'], capture_output=True, timeout=30)
         if result.returncode:
             raise SystemExit('No diagnostic archive available. Enable logging in TapStop and dictate first.')

@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
 """Run the separate instrumentation APK; preserve all enabled accessibility services."""
+import argparse
 import subprocess
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--serial", help="ADB device serial")
+parser.add_argument("--fresh-install", action="store_true", help="Expect no configured cloud credentials")
+args = parser.parse_args()
+adb_command = ["adb", "-s", args.serial] if args.serial else ["adb"]
 
 
 def adb(*args):
-    return subprocess.check_output(["adb", *args], text=True).strip()
+    return subprocess.check_output([*adb_command, *args], text=True).strip()
 
 
 original = adb("shell", "settings", "get", "secure", "enabled_accessibility_services")
-service = "de.kf.blitztext/de.kf.blitztext.TextInsertService"
+service = "de.kf.tapstop/de.kf.tapstop.TextInsertService"
 if service not in original.split(":"):
     raise SystemExit("Enable TapStop accessibility before running this test.")
 process = subprocess.Popen([
-    "adb", "shell", "am", "instrument", "-w",
-    "de.kf.blitztext.test/de.kf.blitztext.StatsInstrumentation"
+    *adb_command, "shell", "am", "instrument", "-w",
+    *(["-e", "freshInstall", "true"] if args.fresh_install else []),
+    "de.kf.tapstop.test/de.kf.tapstop.StatsInstrumentation"
 ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 output = []
 try:

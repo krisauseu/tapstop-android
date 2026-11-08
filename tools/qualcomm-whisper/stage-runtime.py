@@ -63,22 +63,17 @@ def main():
         sources.append((paths[0], output))
 
     sdk = args.voiceai_sdk
+    notice_pins = json.loads(Path(__file__).with_name("runtime-notices.json").read_text())
     notices = [
-        (sdk / "Qualcomm AI Stack Proprietary License.pdf", "VoiceAI-AI-Stack-License.pdf",
-         "1c5471e8087d32e2c3a30902d421c65c61093c96c3cf7b3de31dae8af9cc96c5"),
-        (sdk / "whisper_sdk/LICENSE", "VoiceAI-LICENSE.txt",
-         "64cb3f7075993865937228afd923dedb3f08df9492200c4811d042b1f8f53fdc"),
-        (sdk / "whisper_sdk/NOTICE", "VoiceAI-NOTICE.txt",
-         "b7bc294369c237ed02a8d1f2dc5d4551a97c0ef94c33c60a42964860d8603b1e"),
-        (args.qairt_license_dir / "LICENSE.pdf", "QAIRT-LICENSE.pdf",
-         "ec1dccfdcba5c6e64126e84199b8362bf4999107bfa567ebe831dbb4c461692b"),
-        (args.qairt_license_dir / "NOTICE.txt", "QAIRT-NOTICE.txt",
-         "0c5e8aad3506d0ab881cabaf0dae8de64e1784dc1ee6c873caf24a78fbf01924"),
-        (args.qairt_license_dir / "QNN_NOTICE.txt", "QNN-NOTICE.txt",
-         "0c5e8aad3506d0ab881cabaf0dae8de64e1784dc1ee6c873caf24a78fbf01924"),
+        (sdk / "Qualcomm AI Stack Proprietary License.pdf", "VoiceAI-AI-Stack-License.pdf"),
+        (sdk / "whisper_sdk/LICENSE", "VoiceAI-LICENSE.txt"),
+        (sdk / "whisper_sdk/NOTICE", "VoiceAI-NOTICE.txt"),
+        (args.qairt_license_dir / "LICENSE.pdf", "QAIRT-LICENSE.pdf"),
+        (args.qairt_license_dir / "NOTICE.txt", "QAIRT-NOTICE.txt"),
+        (args.qairt_license_dir / "QNN_NOTICE.txt", "QNN-NOTICE.txt"),
     ]
-    for path, name, expected in notices:
-        if not path.is_file() or digest(path) != expected:
+    for path, name in notices:
+        if not path.is_file() or digest(path) != notice_pins[name]:
             raise ValueError(f"Missing or changed license/notice: {name}")
         sources.append((path, Path("assets/notices") / name))
     args.output.mkdir(parents=True, exist_ok=False)

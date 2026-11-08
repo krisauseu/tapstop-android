@@ -16,7 +16,7 @@ def line(message, tag="Whisper", pid=123):
 def initialization(htp=75):
     target, soc = ("sm8650-v75", 57) if htp == 75 else ("sm8845-v81", 97)
     return "".join(line(message) for message in [
-        f"Successfully opened file /storage/emulated/0/Android/data/de.kf.blitztext/files/qualcomm-runtime/2.50.0.260828/v{htp}/./libQnnHtpV{htp}Skel.so",
+        f"Successfully opened file /storage/emulated/0/Android/data/de.kf.tapstop/files/qualcomm-runtime/2.50.0.260828/v{htp}/./libQnnHtpV{htp}Skel.so",
         f"remote_handle64_open: opened handle 0xabcdef for file:///libQnnHtpV{htp}Skel.so?qnn_2_50_0_skel_handle_invoke&_dom=cdsp on domain 3",
         "backendCreate successful", "deviceCreate successful", "hf_whisper_encoder", "hf_whisper_decoder", "_is_fp16 1 data_type 1",
     ]) + line(f"runtime_ready target={target} htp={htp} soc_model={soc}", "TapStopQualcomm")

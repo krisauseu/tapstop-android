@@ -14,7 +14,7 @@ a = p.parse_args()
 root = Path('diagnostics/honor') / a.name
 root.mkdir(parents=True, exist_ok=True)
 base = ['adb', '-s', a.serial]
-pkg = 'de.kf.blitztext'
+pkg = 'de.kf.tapstop'
 def adb(*args):
     r = subprocess.run(base + list(args), capture_output=True, text=True, timeout=20)
     return r.stdout.strip() + ('\nERROR ' + r.stderr.strip() if r.stderr.strip() else '')
@@ -58,7 +58,7 @@ with (root / 'logcat.txt').open('w') as log:
         '-e', 'rawCount', str(a.raw), '-e', 'plusCount', '0', '-e', 'provider', a.provider,
         '-e', 'groqFirst', 'true', '-e', 'settleMs', str(a.settle)]
     if a.manual: args += ['-e', 'manualRawCount', '3', '-e', 'manualPlusCount', '2']
-    args += [pkg + '.test/de.kf.blitztext.StatsInstrumentation']
+    args += [pkg + '.test/de.kf.tapstop.StatsInstrumentation']
     try:
         with (root / 'results.txt').open('w') as output:
             child = subprocess.Popen(base + args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)

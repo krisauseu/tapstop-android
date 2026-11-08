@@ -4,10 +4,10 @@
 
 ## Projekt
 - Native Android-App mit verschiebbarer Overlay-Blase, Texteingabe über Accessibility und Clipboard-Fallback.
-- Version 0.11 (versionCode 11), Update mit bisheriger Debug-Signatur.
+- Version 0.12 (versionCode 12), neue Paketkennung und eigene Release-Signatur.
 - Modi: Roh (STT ohne Rewrite), Plus (minimale Korrektur), Chat (lockere Nachricht), Formal (sachliche Überarbeitung).
 - Stack: Kotlin, Jetpack Compose/Material 3, Android Services, Gradle Kotlin DSL; Android 10+ (minSdk 29).
-- Anzeigename: TapStop; Application-ID und Kotlin-Package bleiben de.kf.blitztext.
+- Anzeigename: TapStop; Application-ID und Kotlin-Namespace: de.kf.tapstop.
 
 ## APIs und Modelle
 - OpenAI: https://api.openai.com/v1 — POST /audio/transcriptions (whisper-1); POST /chat/completions (gpt-4o-mini).
@@ -19,7 +19,7 @@
 - STT- und Rewrite-Provider sind getrennt wählbar; kein automatischer Cloud-Fallback.
 
 ## Architektur
-Quellcode: app/src/main/java/de/kf/blitztext/
+Quellcode: app/src/main/java/de/kf/tapstop/
 - MainActivity.kt + Dashboard.kt: Compose-Oberfläche für Einstellungen, Provider, Modellimport und Nutzungsstatistik.
 - OverlayService.kt: Mikrofon-Foreground-Service und Verarbeitung auf einem Hintergrund-Worker. BubbleOverlay.kt + BubbleGesture.kt + Mode.kt: Blase, Gesten und Modusfächer als Accessibility-Overlay.
 - AudioRecording.kt: Cloudaufnahme als AAC/M4A; lokale Aufnahme als PCM16-WAV, mono, 16 kHz, maximal 30 Sekunden.
@@ -43,6 +43,6 @@ Quellcode: app/src/main/java/de/kf/blitztext/
 - docs/QUALCOMM_LOCAL_STT.md + docs/QUALCOMM_LICENSING.md: lokale Runtime, Modellimport, Einschränkungen und Lizenzen.
 - DEVICE_TESTS.md + INSERT_DEVICE_TESTS.md: dokumentierte Geräteprüfungen.
 - Buildvoraussetzungen: JDK 17 und Android SDK 36; JAVA_HOME auf JDK 17 setzen.
-- Build/Checks: ./gradlew assembleDebug lint testDebugUnitTest packageTapStop
+- Build/Checks: ./gradlew assembleDebug lint testDebugUnitTest; signierter Vollbuild: RELEASING.md.
 - Tests: app/src/test/ (JUnit/Robolectric), app/src/androidTest/ und scripts/device-tests.py (Gerätetests).
 - Optionaler Runtime-Build: -PqualcommRuntimeDir=/path/to/local-runtime; siehe tools/qualcomm-whisper/README.md.

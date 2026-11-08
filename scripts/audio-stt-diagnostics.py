@@ -12,7 +12,7 @@ import subprocess
 import tarfile
 from zoneinfo import ZoneInfo
 
-PACKAGE = 'de.kf.blitztext'
+PACKAGE = 'de.kf.tapstop'
 ROOT = 'no_backup/audio-stt-diagnostics'
 UUID = r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
 

@@ -1,0 +1,26 @@
+name: Source build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK components
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+      - name: Build and test without Qualcomm or signing credentials
+        run: |
+          ./gradlew --no-daemon :app:assembleRelease :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug :app:lintRelease
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+          python3 -m unittest discover -s tools/qualcomm-whisper -p 'test_*.py'
+          python3 tools/qualcomm-whisper/test-verify-htp.py
